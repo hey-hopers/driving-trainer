@@ -19,6 +19,7 @@ type RouteResult struct {
 	DistanceMeters  int
 	DurationSeconds int
 	Polyline        string
+	Segments        []RouteSegmentResult
 }
 
 type NewRoute struct {
@@ -27,6 +28,7 @@ type NewRoute struct {
 	DistanceMeters  int
 	DurationSeconds int
 	Polyline        string
+	Segments        []RouteSegmentResult
 }
 
 var (
@@ -68,6 +70,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 		DistanceMeters:  route.DistanceMeters,
 		DurationSeconds: route.DurationSeconds,
 		Polyline:        route.Polyline,
+		Segments:        segmentsOrWholeRoute(route, coordinates),
 	})
 	if err != nil {
 		return AnalyzeRouteResponse{}, fmt.Errorf("%w: %v", ErrRoutePersistence, err)
@@ -79,6 +82,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 			DistanceMeters:  route.DistanceMeters,
 			DurationSeconds: route.DurationSeconds,
 			Polyline:        route.Polyline,
+			Segments:        segmentResponses(persistedRoute.Segments),
 		},
 		Analysis: RouteAnalysis{
 			Difficulty: 0,
@@ -109,7 +113,41 @@ func (s *Service) Get(ctx context.Context, id string) (GetRouteResponse, error) 
 			DistanceMeters:  route.DistanceMeters,
 			DurationSeconds: route.DurationSeconds,
 			Polyline:        route.Polyline,
+			Segments:        segmentResponses(route.Segments),
 			CreatedAt:       route.CreatedAt,
 		},
 	}, nil
+}
+
+func segmentsOrWholeRoute(route RouteResult, geometry []Coordinate) []RouteSegmentResult {
+	if len(route.Segments) > 0 {
+		return route.Segments
+	}
+
+	return []RouteSegmentResult{
+		{
+			Sequence:        0,
+			Geometry:        geometry,
+			DistanceMeters:  route.DistanceMeters,
+			DurationSeconds: route.DurationSeconds,
+		},
+	}
+}
+
+func segmentResponses(segments []RouteSegment) []RouteSegmentResponse {
+	responses := make([]RouteSegmentResponse, 0, len(segments))
+	for _, segment := range segments {
+		responses = append(responses, RouteSegmentResponse{
+			ID:              segment.ID,
+			Sequence:        segment.Sequence,
+			Geometry:        segment.Geometry,
+			DistanceMeters:  segment.DistanceMeters,
+			DurationSeconds: segment.DurationSeconds,
+			RoadClass:       segment.RoadClass,
+			RoadName:        segment.RoadName,
+			RoadUse:         segment.RoadUse,
+			SpeedLimitKph:   segment.SpeedLimitKph,
+		})
+	}
+	return responses
 }

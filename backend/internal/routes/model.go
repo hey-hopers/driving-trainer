@@ -19,10 +19,11 @@ type AnalyzeRouteResponse struct {
 }
 
 type RouteSummary struct {
-	ID              string `json:"id,omitempty"`
-	DistanceMeters  int    `json:"distanceMeters"`
-	DurationSeconds int    `json:"durationSeconds"`
-	Polyline        string `json:"polyline"`
+	ID              string                 `json:"id,omitempty"`
+	DistanceMeters  int                    `json:"distanceMeters"`
+	DurationSeconds int                    `json:"durationSeconds"`
+	Polyline        string                 `json:"polyline"`
+	Segments        []RouteSegmentResponse `json:"segments,omitempty"`
 }
 
 type Route struct {
@@ -32,7 +33,33 @@ type Route struct {
 	DistanceMeters  int
 	DurationSeconds int
 	Polyline        string
+	Segments        []RouteSegment
 	CreatedAt       time.Time
+}
+
+type RouteSegment struct {
+	ID              string
+	RouteID         string
+	Sequence        int
+	Geometry        []Coordinate
+	DistanceMeters  int
+	DurationSeconds int
+	RoadClass       string
+	RoadName        string
+	RoadUse         string
+	SpeedLimitKph   int
+	CreatedAt       time.Time
+}
+
+type RouteSegmentResult struct {
+	Sequence        int
+	Geometry        []Coordinate
+	DistanceMeters  int
+	DurationSeconds int
+	RoadClass       string
+	RoadName        string
+	RoadUse         string
+	SpeedLimitKph   int
 }
 
 type GetRouteResponse struct {
@@ -40,13 +67,26 @@ type GetRouteResponse struct {
 }
 
 type PersistedRouteResponse struct {
-	ID              string       `json:"id"`
-	Source          string       `json:"source"`
+	ID              string                 `json:"id"`
+	Source          string                 `json:"source"`
+	Geometry        []Coordinate           `json:"geometry"`
+	DistanceMeters  int                    `json:"distanceMeters"`
+	DurationSeconds int                    `json:"durationSeconds"`
+	Polyline        string                 `json:"polyline"`
+	Segments        []RouteSegmentResponse `json:"segments"`
+	CreatedAt       time.Time              `json:"createdAt"`
+}
+
+type RouteSegmentResponse struct {
+	ID              string       `json:"id,omitempty"`
+	Sequence        int          `json:"sequence"`
 	Geometry        []Coordinate `json:"geometry"`
 	DistanceMeters  int          `json:"distanceMeters"`
-	DurationSeconds int          `json:"durationSeconds"`
-	Polyline        string       `json:"polyline"`
-	CreatedAt       time.Time    `json:"createdAt"`
+	DurationSeconds int          `json:"durationSeconds,omitempty"`
+	RoadClass       string       `json:"roadClass,omitempty"`
+	RoadName        string       `json:"roadName,omitempty"`
+	RoadUse         string       `json:"roadUse,omitempty"`
+	SpeedLimitKph   int          `json:"speedLimitKph,omitempty"`
 }
 
 type RouteAnalysis struct {

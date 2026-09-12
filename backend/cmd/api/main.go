@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"driving-trainer/backend/internal/config"
-	db "driving-trainer/backend/internal/db/sqlc"
 	"driving-trainer/backend/internal/httpserver"
 	"driving-trainer/backend/internal/routes"
 	"driving-trainer/backend/internal/routing/valhalla"
@@ -35,7 +34,7 @@ func main() {
 	routerClient := valhalla.NewClient(cfg.ValhallaURL, &http.Client{
 		Timeout: 10 * time.Second,
 	})
-	routeStore := routes.NewPostgresStore(db.New(pool))
+	routeStore := routes.NewPostgresStore(pool)
 	routeService := routes.NewService(routerClient, routeStore)
 	routeHandler := routes.NewHandler(routeService)
 	router := httpserver.NewRouter(routeHandler)

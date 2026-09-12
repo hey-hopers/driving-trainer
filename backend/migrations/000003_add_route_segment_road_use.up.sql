@@ -1,0 +1,2 @@
+ALTER TABLE route_segments
+ADD COLUMN IF NOT EXISTS road_use VARCHAR(50);

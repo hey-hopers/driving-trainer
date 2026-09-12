@@ -30,6 +30,22 @@ func (fakeRouter) CalculateRoute(ctx context.Context, origin routes.Coordinate, 
 type fakeStore struct{}
 
 func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes.Route, error) {
+	segments := make([]routes.RouteSegment, 0, len(route.Segments))
+	for _, segment := range route.Segments {
+		segments = append(segments, routes.RouteSegment{
+			ID:              "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+			RouteID:         "11111111-1111-1111-1111-111111111111",
+			Sequence:        segment.Sequence,
+			Geometry:        segment.Geometry,
+			DistanceMeters:  segment.DistanceMeters,
+			DurationSeconds: segment.DurationSeconds,
+			RoadName:        segment.RoadName,
+			RoadUse:         segment.RoadUse,
+			SpeedLimitKph:   segment.SpeedLimitKph,
+			CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
+		})
+	}
+
 	return routes.Route{
 		ID:              "11111111-1111-1111-1111-111111111111",
 		Source:          route.Source,
@@ -37,6 +53,7 @@ func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes
 		DistanceMeters:  route.DistanceMeters,
 		DurationSeconds: route.DurationSeconds,
 		Polyline:        route.Polyline,
+		Segments:        segments,
 		CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
 	}, nil
 }
@@ -55,7 +72,21 @@ func (fakeStore) GetRoute(ctx context.Context, id string) (routes.Route, error) 
 		DistanceMeters:  2476,
 		DurationSeconds: 376,
 		Polyline:        "??AA",
-		CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
+		Segments: []routes.RouteSegment{
+			{
+				ID:              "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+				RouteID:         id,
+				Sequence:        0,
+				Geometry:        []routes.Coordinate{{Latitude: 0, Longitude: 0}, {Latitude: 0.000001, Longitude: 0.000001}},
+				DistanceMeters:  2476,
+				DurationSeconds: 376,
+				RoadName:        "Rua Teste",
+				RoadUse:         "road",
+				SpeedLimitKph:   40,
+				CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
+			},
+		},
+		CreatedAt: time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
 	}, nil
 }
 
@@ -90,6 +121,12 @@ func TestAnalyzeRouteValidRequest(t *testing.T) {
 	if response.Route.Polyline != "??AA" {
 		t.Fatalf("expected polyline ??AA, got %q", response.Route.Polyline)
 	}
+	if len(response.Route.Segments) != 1 {
+		t.Fatalf("expected 1 segment, got %d", len(response.Route.Segments))
+	}
+	if response.Route.Segments[0].RoadUse != "" {
+		t.Fatalf("expected empty fallback road use, got %q", response.Route.Segments[0].RoadUse)
+	}
 }
 
 func TestGetRouteValidID(t *testing.T) {
@@ -114,6 +151,15 @@ func TestGetRouteValidID(t *testing.T) {
 	}
 	if len(response.Route.Geometry) != 2 {
 		t.Fatalf("expected 2 geometry points, got %d", len(response.Route.Geometry))
+	}
+	if len(response.Route.Segments) != 1 {
+		t.Fatalf("expected 1 segment, got %d", len(response.Route.Segments))
+	}
+	if response.Route.Segments[0].RoadUse != "road" {
+		t.Fatalf("expected road use road, got %q", response.Route.Segments[0].RoadUse)
+	}
+	if response.Route.Segments[0].SpeedLimitKph != 40 {
+		t.Fatalf("expected speed limit 40, got %d", response.Route.Segments[0].SpeedLimitKph)
 	}
 }
 

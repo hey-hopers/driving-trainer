@@ -76,6 +76,99 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Creat
 	return i, err
 }
 
+const createRouteSegment = `-- name: CreateRouteSegment :one
+INSERT INTO route_segments (
+    id,
+    route_id,
+    sequence,
+    geometry,
+    distance_meters,
+    duration_seconds,
+    road_class,
+    road_name,
+    road_use,
+    speed_limit_kph
+) VALUES (
+    gen_random_uuid(),
+    $1::uuid,
+    $2,
+    ST_GeogFromText($3::text),
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9
+)
+RETURNING
+    id::text,
+    route_id::text,
+    sequence,
+    ST_AsGeoJSON(geometry::geometry)::text AS geometry_geojson,
+    distance_meters,
+    duration_seconds,
+    road_class,
+    road_name,
+    road_use,
+    speed_limit_kph,
+    created_at
+`
+
+type CreateRouteSegmentParams struct {
+	RouteID         pgtype.UUID
+	Sequence        int32
+	GeometryWkt     string
+	DistanceMeters  int32
+	DurationSeconds pgtype.Int4
+	RoadClass       pgtype.Text
+	RoadName        pgtype.Text
+	RoadUse         pgtype.Text
+	SpeedLimitKph   pgtype.Int4
+}
+
+type CreateRouteSegmentRow struct {
+	ID              string
+	RouteID         string
+	Sequence        int32
+	GeometryGeojson string
+	DistanceMeters  int32
+	DurationSeconds pgtype.Int4
+	RoadClass       pgtype.Text
+	RoadName        pgtype.Text
+	RoadUse         pgtype.Text
+	SpeedLimitKph   pgtype.Int4
+	CreatedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) CreateRouteSegment(ctx context.Context, arg CreateRouteSegmentParams) (CreateRouteSegmentRow, error) {
+	row := q.db.QueryRow(ctx, createRouteSegment,
+		arg.RouteID,
+		arg.Sequence,
+		arg.GeometryWkt,
+		arg.DistanceMeters,
+		arg.DurationSeconds,
+		arg.RoadClass,
+		arg.RoadName,
+		arg.RoadUse,
+		arg.SpeedLimitKph,
+	)
+	var i CreateRouteSegmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.RouteID,
+		&i.Sequence,
+		&i.GeometryGeojson,
+		&i.DistanceMeters,
+		&i.DurationSeconds,
+		&i.RoadClass,
+		&i.RoadName,
+		&i.RoadUse,
+		&i.SpeedLimitKph,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getRouteByID = `-- name: GetRouteByID :one
 SELECT
     id::text,
@@ -112,4 +205,68 @@ func (q *Queries) GetRouteByID(ctx context.Context, id pgtype.UUID) (GetRouteByI
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listRouteSegments = `-- name: ListRouteSegments :many
+SELECT
+    id::text,
+    route_id::text,
+    sequence,
+    ST_AsGeoJSON(geometry::geometry)::text AS geometry_geojson,
+    distance_meters,
+    duration_seconds,
+    road_class,
+    road_name,
+    road_use,
+    speed_limit_kph,
+    created_at
+FROM route_segments
+WHERE route_id = $1::uuid
+ORDER BY sequence
+`
+
+type ListRouteSegmentsRow struct {
+	ID              string
+	RouteID         string
+	Sequence        int32
+	GeometryGeojson string
+	DistanceMeters  int32
+	DurationSeconds pgtype.Int4
+	RoadClass       pgtype.Text
+	RoadName        pgtype.Text
+	RoadUse         pgtype.Text
+	SpeedLimitKph   pgtype.Int4
+	CreatedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) ListRouteSegments(ctx context.Context, routeID pgtype.UUID) ([]ListRouteSegmentsRow, error) {
+	rows, err := q.db.Query(ctx, listRouteSegments, routeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRouteSegmentsRow
+	for rows.Next() {
+		var i ListRouteSegmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RouteID,
+			&i.Sequence,
+			&i.GeometryGeojson,
+			&i.DistanceMeters,
+			&i.DurationSeconds,
+			&i.RoadClass,
+			&i.RoadName,
+			&i.RoadUse,
+			&i.SpeedLimitKph,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

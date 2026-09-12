@@ -67,4 +67,5 @@ type RouteSegment struct {
 	DifficultyScore   pgtype.Numeric
 	Metadata          []byte
 	CreatedAt         pgtype.Timestamptz
+	RoadUse           pgtype.Text
 }
