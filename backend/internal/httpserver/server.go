@@ -15,6 +15,7 @@ func NewRouter(routeHandler *routes.Handler) http.Handler {
 	r.Get("/health", healthHandler)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/routes/analyze", routeHandler.Analyze)
+		r.Get("/routes/{id}", routeHandler.Get)
 	})
 
 	return r

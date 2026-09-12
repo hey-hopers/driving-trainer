@@ -5,6 +5,7 @@ import "os"
 type Config struct {
 	Addr        string
 	ValhallaURL string
+	DatabaseURL string
 }
 
 func Load() Config {
@@ -21,5 +22,6 @@ func Load() Config {
 	return Config{
 		Addr:        ":" + port,
 		ValhallaURL: valhallaURL,
+		DatabaseURL: os.Getenv("DATABASE_URL"),
 	}
 }

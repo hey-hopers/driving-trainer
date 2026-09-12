@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -31,7 +33,30 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.service.Analyze(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, ErrRoutePersistence) {
+			writeError(w, http.StatusServiceUnavailable, "failed to persist route")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to analyze route")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	res, err := h.service.Get(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidRouteID):
+			writeError(w, http.StatusBadRequest, "invalid route id")
+		case errors.Is(err, ErrRouteNotFound):
+			writeError(w, http.StatusNotFound, "route not found")
+		default:
+			writeError(w, http.StatusServiceUnavailable, "failed to retrieve route")
+		}
 		return
 	}
 

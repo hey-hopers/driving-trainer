@@ -224,6 +224,14 @@ Contains information such as:
 * source
 * global difficulty
 
+Current persistence stores the authoritative route geometry in PostgreSQL/PostGIS as:
+
+```text
+GEOGRAPHY(LINESTRING, 4326)
+```
+
+For routes produced by Valhalla, the backend decodes the returned polyline6 into coordinates and writes those coordinates as the PostGIS linestring. The original polyline is retained only as auxiliary provider metadata.
+
 ## RouteSegment
 
 Represents a meaningful portion of the route.

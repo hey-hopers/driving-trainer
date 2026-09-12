@@ -83,6 +83,8 @@ No mocked route data remains.
 
 # M2 — Route Persistence
 
+Status: Completed
+
 Goal:
 
 Persist real route information using PostgreSQL/PostGIS.
@@ -102,8 +104,17 @@ Initial entities:
 
 ```text
 Route
-RouteAnalysis
 ```
+
+Completed notes:
+
+* PostgreSQL access is configured through `DATABASE_URL`.
+* pgx is used for the database connection and sqlc generates typed query access.
+* `POST /api/v1/routes/analyze` persists Valhalla routes after decoding `route.polyline` as polyline6.
+* The official persisted geometry is `GEOGRAPHY(LINESTRING, 4326)`.
+* The original Valhalla polyline6 is stored as auxiliary route metadata.
+* `GET /api/v1/routes/{id}` returns basic persisted route data.
+* Difficulty placeholders and route events are not persisted in this milestone.
 
 Definition of Done:
 
