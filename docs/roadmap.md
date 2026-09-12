@@ -124,6 +124,8 @@ A route generated through Valhalla can be stored and retrieved from PostgreSQL w
 
 # M3 — Route Segmentation
 
+Status: Completed
+
 Goal:
 
 Convert a route into meaningful segments for later difficulty analysis.
@@ -138,6 +140,19 @@ Tasks:
 * preserve segment order
 * persist segment geometry
 * persist available road metadata
+
+Completed notes:
+
+* Valhalla `trace_attributes` edges are converted into ordered RouteSegments.
+* Adjacent edges with the same road class, road name, road use and speed limit are grouped into one segment.
+* Segment geometry is sliced from Valhalla shape indexes.
+* Segment distance, estimated duration, available street names, road class, road use and speed limit are persisted.
+* `GET /api/v1/routes/{id}` returns persisted segments ordered by sequence.
+* `POST /api/v1/routes/analyze` returns the segments created for the route.
+
+Future notes:
+
+* Additional road metadata such as surface and lane count can be added from `trace_attributes` when needed by later difficulty/event milestones.
 
 Definition of Done:
 
