@@ -25,7 +25,7 @@ The backend can be executed locally and the first API endpoint can be validated 
 
 # M1 — Real Routing with Valhalla
 
-Status: Next
+Status: Completed
 
 Goal:
 
@@ -45,6 +45,15 @@ Tasks:
 * return route geometry/polyline
 * handle Valhalla errors
 * create integration tests using mocks/test server
+
+Completed notes:
+
+* Valhalla runs locally through Docker Compose.
+* The initial regional dataset is `sul-latest.osm.pbf`.
+* Direct Valhalla `/status` and `/route` validation succeeded.
+* `POST /api/v1/routes/analyze` now returns route data calculated by Valhalla.
+* `route.polyline` contains Valhalla polyline6 geometry.
+* Difficulty scores and route events intentionally remain placeholders for later milestones.
 
 Do not implement yet:
 
