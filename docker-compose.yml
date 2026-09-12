@@ -22,5 +22,25 @@ services:
       timeout: 5s
       retries: 5
 
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:3.8.3
+    container_name: driving_trainer_valhalla
+
+    restart: unless-stopped
+
+    ports:
+      - "8002:8002"
+
+    volumes:
+      - ./infrastructure/valhalla/custom_files:/custom_files
+
+    environment:
+      tile_urls: https://download.geofabrik.de/south-america/brazil/sul-latest.osm.pbf
+      build_elevation: "False"
+      build_admins: "True"
+      build_time_zones: "True"
+      build_tar: "True"
+      server_threads: "2"
+
 volumes:
   driving_postgres_data:
