@@ -3,16 +3,21 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"driving-trainer/backend/internal/config"
 	"driving-trainer/backend/internal/httpserver"
 	"driving-trainer/backend/internal/routes"
+	"driving-trainer/backend/internal/routing/valhalla"
 )
 
 func main() {
 	cfg := config.Load()
 
-	routeService := routes.NewService()
+	routerClient := valhalla.NewClient(cfg.ValhallaURL, &http.Client{
+		Timeout: 10 * time.Second,
+	})
+	routeService := routes.NewService(routerClient)
 	routeHandler := routes.NewHandler(routeService)
 	router := httpserver.NewRouter(routeHandler)
 

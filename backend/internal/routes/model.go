@@ -17,8 +17,9 @@ type AnalyzeRouteResponse struct {
 }
 
 type RouteSummary struct {
-	DistanceMeters  int `json:"distanceMeters"`
-	DurationSeconds int `json:"durationSeconds"`
+	DistanceMeters  int    `json:"distanceMeters"`
+	DurationSeconds int    `json:"durationSeconds"`
+	Polyline        string `json:"polyline"`
 }
 
 type RouteAnalysis struct {

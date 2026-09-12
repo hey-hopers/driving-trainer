@@ -3,7 +3,8 @@ package config
 import "os"
 
 type Config struct {
-	Addr string
+	Addr        string
+	ValhallaURL string
 }
 
 func Load() Config {
@@ -12,7 +13,13 @@ func Load() Config {
 		port = "8080"
 	}
 
+	valhallaURL := os.Getenv("VALHALLA_URL")
+	if valhallaURL == "" {
+		valhallaURL = "http://localhost:8002"
+	}
+
 	return Config{
-		Addr: ":" + port,
+		Addr:        ":" + port,
+		ValhallaURL: valhallaURL,
 	}
 }

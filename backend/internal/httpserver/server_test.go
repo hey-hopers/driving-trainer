@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,17 @@ import (
 )
 
 func testRouter() http.Handler {
-	return NewRouter(routes.NewHandler(routes.NewService()))
+	return NewRouter(routes.NewHandler(routes.NewService(fakeRouter{})))
+}
+
+type fakeRouter struct{}
+
+func (fakeRouter) CalculateRoute(ctx context.Context, origin routes.Coordinate, destination routes.Coordinate) (routes.RouteResult, error) {
+	return routes.RouteResult{
+		DistanceMeters:  2476,
+		DurationSeconds: 376,
+		Polyline:        "encoded-polyline6",
+	}, nil
 }
 
 func TestAnalyzeRouteValidRequest(t *testing.T) {
@@ -33,11 +44,14 @@ func TestAnalyzeRouteValidRequest(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		t.Fatalf("expected valid JSON response: %v", err)
 	}
-	if response.Route.DistanceMeters != 5421 {
-		t.Fatalf("expected distance 5421, got %d", response.Route.DistanceMeters)
+	if response.Route.DistanceMeters != 2476 {
+		t.Fatalf("expected distance 2476, got %d", response.Route.DistanceMeters)
 	}
-	if response.Analysis.Categories.Hills != 6.2 {
-		t.Fatalf("expected hills score 6.2, got %v", response.Analysis.Categories.Hills)
+	if response.Route.DurationSeconds != 376 {
+		t.Fatalf("expected duration 376, got %d", response.Route.DurationSeconds)
+	}
+	if response.Route.Polyline != "encoded-polyline6" {
+		t.Fatalf("expected polyline encoded-polyline6, got %q", response.Route.Polyline)
 	}
 }
 
