@@ -333,6 +333,14 @@ The Difficulty Engine answers:
 
 It should be deterministic and independently testable.
 
+Current engine version:
+
+```text
+difficulty-v1
+```
+
+`difficulty-v1` is implemented in the backend domain layer and does not depend on Valhalla-specific models. It scores route segments and domain events after routing, segmentation, elevation, curve, road-event and compound-event analysis have already produced provider-independent route data.
+
 Potential inputs include:
 
 * road type
@@ -368,6 +376,14 @@ The engine should consider:
 * peak events
 * frequency of difficult events
 * diversity of driving situations
+
+Current persisted outputs:
+
+* overall difficulty
+* average difficulty
+* peak difficulty
+* complexity score
+* category scores
 
 ---
 

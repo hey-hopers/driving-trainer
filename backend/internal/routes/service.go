@@ -32,6 +32,7 @@ type NewRoute struct {
 	Polyline        string
 	Segments        []RouteSegmentResult
 	Events          []RouteEventResult
+	Analysis        RouteAnalysis
 }
 
 var (
@@ -72,6 +73,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 	roadEvents := append(AnalyzeRoadEvents(route.RoadEventHints), AnalyzeSegmentRoadEvents(segments)...)
 	events = append(events, dedupeRoadEvents(roadEvents)...)
 	events = append(events, AnalyzeCompoundEvents(events, route.DistanceMeters)...)
+	analysis := AnalyzeDifficulty(segments, events, route.DistanceMeters)
 
 	persistedRoute, err := s.store.CreateRoute(ctx, NewRoute{
 		Source:          "valhalla",
@@ -81,6 +83,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 		Polyline:        route.Polyline,
 		Segments:        segments,
 		Events:          events,
+		Analysis:        analysis,
 	})
 	if err != nil {
 		return AnalyzeRouteResponse{}, fmt.Errorf("%w: %v", ErrRoutePersistence, err)
@@ -94,11 +97,8 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 			Polyline:        route.Polyline,
 			Segments:        segmentResponses(persistedRoute.Segments),
 		},
-		Analysis: RouteAnalysis{
-			Difficulty: 0,
-			Categories: RouteCategoryScores{},
-		},
-		Events: eventResponses(persistedRoute.Events),
+		Analysis: persistedRoute.Analysis,
+		Events:   eventResponses(persistedRoute.Events),
 	}, nil
 }
 
@@ -126,7 +126,8 @@ func (s *Service) Get(ctx context.Context, id string) (GetRouteResponse, error) 
 			Segments:        segmentResponses(route.Segments),
 			CreatedAt:       route.CreatedAt,
 		},
-		Events: eventResponses(route.Events),
+		Analysis: route.Analysis,
+		Events:   eventResponses(route.Events),
 	}, nil
 }
 

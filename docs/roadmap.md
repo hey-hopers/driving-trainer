@@ -343,6 +343,14 @@ The same route and engine version always produce the same score and category bre
 
 The engine must have strong unit-test coverage.
 
+Implemented:
+
+* Added deterministic `difficulty-v1` scoring from route segments, hill/curve/road/compound events, speed characteristics, event density and event diversity.
+* `POST /api/v1/routes/analyze` now returns `overallDifficulty`, `averageDifficulty`, `peakDifficulty`, `complexityScore` and `categoryScores`.
+* Route analyses and category scores are persisted through the existing `route_analyses` and `route_category_scores` tables.
+* `GET /api/v1/routes/{id}` returns the latest persisted analysis for the route.
+* Added unit coverage for deterministic scoring and empty-route behavior.
+
 ---
 
 # M9 — Android Foundation

@@ -96,6 +96,12 @@ func createRouteWithSegments(ctx context.Context, queries *db.Queries, route New
 	}
 	created.Events = events
 
+	analysis, err := createRouteAnalysis(ctx, queries, created.ID, route.Analysis)
+	if err != nil {
+		return Route{}, err
+	}
+	created.Analysis = analysis
+
 	return created, nil
 }
 
@@ -133,6 +139,12 @@ func (s *PostgresStore) GetRoute(ctx context.Context, id string) (Route, error) 
 		return Route{}, err
 	}
 	route.Events = events
+
+	analysis, err := s.getLatestRouteAnalysis(ctx, route.ID)
+	if err != nil {
+		return Route{}, err
+	}
+	route.Analysis = analysis
 
 	return route, nil
 }
@@ -202,6 +214,63 @@ func createRouteEvent(ctx context.Context, queries *db.Queries, routeID string, 
 	return routeEventFromCreateRow(row)
 }
 
+func createRouteAnalysis(ctx context.Context, queries *db.Queries, routeID string, analysis RouteAnalysis) (RouteAnalysis, error) {
+	parsedRouteID, err := uuid(routeID)
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	if analysis.EngineVersion == "" {
+		analysis.EngineVersion = difficultyEngineVersionV1
+	}
+	if analysis.OverallDifficulty == 0 && analysis.Difficulty > 0 {
+		analysis.OverallDifficulty = analysis.Difficulty
+	}
+	if analysis.Difficulty == 0 && analysis.OverallDifficulty > 0 {
+		analysis.Difficulty = analysis.OverallDifficulty
+	}
+
+	row, err := queries.CreateRouteAnalysis(ctx, db.CreateRouteAnalysisParams{
+		RouteID:           parsedRouteID,
+		EngineVersion:     analysis.EngineVersion,
+		DifficultyScore:   numeric(analysis.OverallDifficulty),
+		AverageDifficulty: nullableNumeric(analysis.AverageDifficulty),
+		PeakDifficulty:    nullableNumeric(analysis.PeakDifficulty),
+		ComplexityScore:   nullableNumeric(analysis.ComplexityScore),
+	})
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	categoryScores := analysis.CategoryScores
+	if len(categoryScores) == 0 {
+		categoryScores = categoryScoresFromLegacy(analysis.Categories)
+	}
+	routeAnalysisID, err := uuid(row.ID)
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	for category, score := range categoryScores {
+		if _, err := queries.CreateRouteCategoryScore(ctx, db.CreateRouteCategoryScoreParams{
+			RouteAnalysisID: routeAnalysisID,
+			Category:        category,
+			Score:           numeric(score),
+		}); err != nil {
+			return RouteAnalysis{}, err
+		}
+	}
+
+	return routeAnalysisFromFields(
+		row.EngineVersion,
+		row.DifficultyScore,
+		row.AverageDifficulty,
+		row.PeakDifficulty,
+		row.ComplexityScore,
+		categoryScores,
+	), nil
+}
+
 func (s *PostgresStore) listRouteSegments(ctx context.Context, routeID string) ([]RouteSegment, error) {
 	parsedRouteID, err := uuid(routeID)
 	if err != nil {
@@ -246,6 +315,45 @@ func (s *PostgresStore) listRouteEvents(ctx context.Context, routeID string) ([]
 	}
 
 	return events, nil
+}
+
+func (s *PostgresStore) getLatestRouteAnalysis(ctx context.Context, routeID string) (RouteAnalysis, error) {
+	parsedRouteID, err := uuid(routeID)
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	row, err := s.queries.GetLatestRouteAnalysis(ctx, parsedRouteID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return RouteAnalysis{}, nil
+		}
+		return RouteAnalysis{}, err
+	}
+
+	routeAnalysisID, err := uuid(row.ID)
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	categoryRows, err := s.queries.ListRouteCategoryScores(ctx, routeAnalysisID)
+	if err != nil {
+		return RouteAnalysis{}, err
+	}
+
+	categoryScores := make(map[string]float64, len(categoryRows))
+	for _, categoryRow := range categoryRows {
+		categoryScores[categoryRow.Category] = numericOrZero(categoryRow.Score)
+	}
+
+	return routeAnalysisFromFields(
+		row.EngineVersion,
+		row.DifficultyScore,
+		row.AverageDifficulty,
+		row.PeakDifficulty,
+		row.ComplexityScore,
+		categoryScores,
+	), nil
 }
 
 func routeFromCreateRow(row db.CreateRouteRow) (Route, error) {
@@ -531,6 +639,14 @@ func nullableNumeric(value float64) pgtype.Numeric {
 	return numeric
 }
 
+func numeric(value float64) pgtype.Numeric {
+	var numeric pgtype.Numeric
+	if err := numeric.Scan(formatFloat(value)); err != nil {
+		return pgtype.Numeric{}
+	}
+	return numeric
+}
+
 func intOrZero(value pgtype.Int4) int {
 	if !value.Valid {
 		return 0
@@ -558,4 +674,44 @@ func numericOrZero(value pgtype.Numeric) float64 {
 		return 0
 	}
 	return number.Float64
+}
+
+func routeAnalysisFromFields(
+	engineVersion string,
+	difficultyScore pgtype.Numeric,
+	averageDifficulty pgtype.Numeric,
+	peakDifficulty pgtype.Numeric,
+	complexityScore pgtype.Numeric,
+	categoryScores map[string]float64,
+) RouteAnalysis {
+	overallDifficulty := numericOrZero(difficultyScore)
+	categories := legacyCategoriesFromScores(categoryScores)
+	return RouteAnalysis{
+		EngineVersion:     engineVersion,
+		Difficulty:        overallDifficulty,
+		OverallDifficulty: overallDifficulty,
+		AverageDifficulty: numericOrZero(averageDifficulty),
+		PeakDifficulty:    numericOrZero(peakDifficulty),
+		ComplexityScore:   numericOrZero(complexityScore),
+		CategoryScores:    categoryScores,
+		Categories:        categories,
+	}
+}
+
+func legacyCategoriesFromScores(scores map[string]float64) RouteCategoryScores {
+	return RouteCategoryScores{
+		Hills:         scores["hills"],
+		Curves:        scores["curves"],
+		Intersections: scores["intersections"],
+		HighSpeed:     scores["highSpeed"],
+	}
+}
+
+func categoryScoresFromLegacy(categories RouteCategoryScores) map[string]float64 {
+	return map[string]float64{
+		"hills":         categories.Hills,
+		"curves":        categories.Curves,
+		"intersections": categories.Intersections,
+		"highSpeed":     categories.HighSpeed,
+	}
 }

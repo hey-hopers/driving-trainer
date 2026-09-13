@@ -35,6 +35,7 @@ type Route struct {
 	Polyline        string
 	Segments        []RouteSegment
 	Events          []RouteEvent
+	Analysis        RouteAnalysis
 	CreatedAt       time.Time
 }
 
@@ -115,8 +116,9 @@ type RouteEventResult struct {
 }
 
 type GetRouteResponse struct {
-	Route  PersistedRouteResponse `json:"route"`
-	Events []RouteEventResponse   `json:"events"`
+	Route    PersistedRouteResponse `json:"route"`
+	Analysis RouteAnalysis          `json:"analysis"`
+	Events   []RouteEventResponse   `json:"events"`
 }
 
 type PersistedRouteResponse struct {
@@ -158,8 +160,14 @@ type RouteEventResponse struct {
 }
 
 type RouteAnalysis struct {
-	Difficulty float64             `json:"difficulty"`
-	Categories RouteCategoryScores `json:"categories"`
+	EngineVersion     string              `json:"engineVersion,omitempty"`
+	Difficulty        float64             `json:"difficulty"`
+	OverallDifficulty float64             `json:"overallDifficulty"`
+	AverageDifficulty float64             `json:"averageDifficulty"`
+	PeakDifficulty    float64             `json:"peakDifficulty"`
+	ComplexityScore   float64             `json:"complexityScore"`
+	CategoryScores    map[string]float64  `json:"categoryScores"`
+	Categories        RouteCategoryScores `json:"categories"`
 }
 
 type RouteCategoryScores struct {

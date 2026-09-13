@@ -82,6 +82,7 @@ func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes
 		Polyline:        route.Polyline,
 		Segments:        segments,
 		Events:          events,
+		Analysis:        route.Analysis,
 		CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
 	}, nil
 }
@@ -112,6 +113,20 @@ func (fakeStore) GetRoute(ctx context.Context, id string) (routes.Route, error) 
 				RoadUse:         "road",
 				SpeedLimitKph:   40,
 				CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
+			},
+		},
+		Analysis: routes.RouteAnalysis{
+			EngineVersion:     "difficulty-v1",
+			Difficulty:        2.75,
+			OverallDifficulty: 2.75,
+			AverageDifficulty: 2.1,
+			PeakDifficulty:    3,
+			ComplexityScore:   2.4,
+			CategoryScores: map[string]float64{
+				"intersections": 3,
+			},
+			Categories: routes.RouteCategoryScores{
+				Intersections: 3,
 			},
 		},
 		CreatedAt: time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
@@ -161,6 +176,12 @@ func TestAnalyzeRouteValidRequest(t *testing.T) {
 	if response.Events[0].Type != "INTERSECTION" {
 		t.Fatalf("expected INTERSECTION event, got %q", response.Events[0].Type)
 	}
+	if response.Analysis.EngineVersion != "difficulty-v1" {
+		t.Fatalf("expected difficulty-v1 analysis, got %q", response.Analysis.EngineVersion)
+	}
+	if response.Analysis.OverallDifficulty <= 0 {
+		t.Fatalf("expected positive overall difficulty, got %v", response.Analysis.OverallDifficulty)
+	}
 }
 
 func TestGetRouteValidID(t *testing.T) {
@@ -194,6 +215,9 @@ func TestGetRouteValidID(t *testing.T) {
 	}
 	if response.Route.Segments[0].SpeedLimitKph != 40 {
 		t.Fatalf("expected speed limit 40, got %d", response.Route.Segments[0].SpeedLimitKph)
+	}
+	if response.Analysis.OverallDifficulty != 2.75 {
+		t.Fatalf("expected overall difficulty 2.75, got %v", response.Analysis.OverallDifficulty)
 	}
 }
 

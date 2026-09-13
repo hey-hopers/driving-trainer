@@ -76,6 +76,113 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Creat
 	return i, err
 }
 
+const createRouteAnalysis = `-- name: CreateRouteAnalysis :one
+INSERT INTO route_analyses (
+    id,
+    route_id,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score
+) VALUES (
+    gen_random_uuid(),
+    $1::uuid,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6
+)
+RETURNING
+    id::text,
+    route_id::text,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score,
+    analyzed_at
+`
+
+type CreateRouteAnalysisParams struct {
+	RouteID           pgtype.UUID
+	EngineVersion     string
+	DifficultyScore   pgtype.Numeric
+	AverageDifficulty pgtype.Numeric
+	PeakDifficulty    pgtype.Numeric
+	ComplexityScore   pgtype.Numeric
+}
+
+type CreateRouteAnalysisRow struct {
+	ID                string
+	RouteID           string
+	EngineVersion     string
+	DifficultyScore   pgtype.Numeric
+	AverageDifficulty pgtype.Numeric
+	PeakDifficulty    pgtype.Numeric
+	ComplexityScore   pgtype.Numeric
+	AnalyzedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) CreateRouteAnalysis(ctx context.Context, arg CreateRouteAnalysisParams) (CreateRouteAnalysisRow, error) {
+	row := q.db.QueryRow(ctx, createRouteAnalysis,
+		arg.RouteID,
+		arg.EngineVersion,
+		arg.DifficultyScore,
+		arg.AverageDifficulty,
+		arg.PeakDifficulty,
+		arg.ComplexityScore,
+	)
+	var i CreateRouteAnalysisRow
+	err := row.Scan(
+		&i.ID,
+		&i.RouteID,
+		&i.EngineVersion,
+		&i.DifficultyScore,
+		&i.AverageDifficulty,
+		&i.PeakDifficulty,
+		&i.ComplexityScore,
+		&i.AnalyzedAt,
+	)
+	return i, err
+}
+
+const createRouteCategoryScore = `-- name: CreateRouteCategoryScore :one
+INSERT INTO route_category_scores (
+    route_analysis_id,
+    category,
+    score
+) VALUES (
+    $1::uuid,
+    $2,
+    $3
+)
+RETURNING
+    route_analysis_id::text,
+    category,
+    score
+`
+
+type CreateRouteCategoryScoreParams struct {
+	RouteAnalysisID pgtype.UUID
+	Category        string
+	Score           pgtype.Numeric
+}
+
+type CreateRouteCategoryScoreRow struct {
+	RouteAnalysisID string
+	Category        string
+	Score           pgtype.Numeric
+}
+
+func (q *Queries) CreateRouteCategoryScore(ctx context.Context, arg CreateRouteCategoryScoreParams) (CreateRouteCategoryScoreRow, error) {
+	row := q.db.QueryRow(ctx, createRouteCategoryScore, arg.RouteAnalysisID, arg.Category, arg.Score)
+	var i CreateRouteCategoryScoreRow
+	err := row.Scan(&i.RouteAnalysisID, &i.Category, &i.Score)
+	return i, err
+}
+
 const createRouteEvent = `-- name: CreateRouteEvent :one
 INSERT INTO route_events (
     id,
@@ -276,6 +383,49 @@ func (q *Queries) CreateRouteSegment(ctx context.Context, arg CreateRouteSegment
 	return i, err
 }
 
+const getLatestRouteAnalysis = `-- name: GetLatestRouteAnalysis :one
+SELECT
+    id::text,
+    route_id::text,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score,
+    analyzed_at
+FROM route_analyses
+WHERE route_id = $1::uuid
+ORDER BY analyzed_at DESC
+LIMIT 1
+`
+
+type GetLatestRouteAnalysisRow struct {
+	ID                string
+	RouteID           string
+	EngineVersion     string
+	DifficultyScore   pgtype.Numeric
+	AverageDifficulty pgtype.Numeric
+	PeakDifficulty    pgtype.Numeric
+	ComplexityScore   pgtype.Numeric
+	AnalyzedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) GetLatestRouteAnalysis(ctx context.Context, routeID pgtype.UUID) (GetLatestRouteAnalysisRow, error) {
+	row := q.db.QueryRow(ctx, getLatestRouteAnalysis, routeID)
+	var i GetLatestRouteAnalysisRow
+	err := row.Scan(
+		&i.ID,
+		&i.RouteID,
+		&i.EngineVersion,
+		&i.DifficultyScore,
+		&i.AverageDifficulty,
+		&i.PeakDifficulty,
+		&i.ComplexityScore,
+		&i.AnalyzedAt,
+	)
+	return i, err
+}
+
 const getRouteByID = `-- name: GetRouteByID :one
 SELECT
     id::text,
@@ -312,6 +462,42 @@ func (q *Queries) GetRouteByID(ctx context.Context, id pgtype.UUID) (GetRouteByI
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listRouteCategoryScores = `-- name: ListRouteCategoryScores :many
+SELECT
+    route_analysis_id::text,
+    category,
+    score
+FROM route_category_scores
+WHERE route_analysis_id = $1::uuid
+ORDER BY category
+`
+
+type ListRouteCategoryScoresRow struct {
+	RouteAnalysisID string
+	Category        string
+	Score           pgtype.Numeric
+}
+
+func (q *Queries) ListRouteCategoryScores(ctx context.Context, routeAnalysisID pgtype.UUID) ([]ListRouteCategoryScoresRow, error) {
+	rows, err := q.db.Query(ctx, listRouteCategoryScores, routeAnalysisID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRouteCategoryScoresRow
+	for rows.Next() {
+		var i ListRouteCategoryScoresRow
+		if err := rows.Scan(&i.RouteAnalysisID, &i.Category, &i.Score); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRouteEvents = `-- name: ListRouteEvents :many

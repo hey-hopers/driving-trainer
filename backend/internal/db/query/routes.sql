@@ -115,6 +115,49 @@ RETURNING
     metadata,
     created_at;
 
+-- name: CreateRouteAnalysis :one
+INSERT INTO route_analyses (
+    id,
+    route_id,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score
+) VALUES (
+    gen_random_uuid(),
+    sqlc.arg(route_id)::uuid,
+    sqlc.arg(engine_version),
+    sqlc.arg(difficulty_score),
+    sqlc.arg(average_difficulty),
+    sqlc.arg(peak_difficulty),
+    sqlc.arg(complexity_score)
+)
+RETURNING
+    id::text,
+    route_id::text,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score,
+    analyzed_at;
+
+-- name: CreateRouteCategoryScore :one
+INSERT INTO route_category_scores (
+    route_analysis_id,
+    category,
+    score
+) VALUES (
+    sqlc.arg(route_analysis_id)::uuid,
+    sqlc.arg(category),
+    sqlc.arg(score)
+)
+RETURNING
+    route_analysis_id::text,
+    category,
+    score;
+
 -- name: ListRouteSegments :many
 SELECT
     id::text,
@@ -150,3 +193,27 @@ SELECT
 FROM route_events
 WHERE route_id = sqlc.arg(route_id)::uuid
 ORDER BY route_distance_meters, created_at;
+
+-- name: GetLatestRouteAnalysis :one
+SELECT
+    id::text,
+    route_id::text,
+    engine_version,
+    difficulty_score,
+    average_difficulty,
+    peak_difficulty,
+    complexity_score,
+    analyzed_at
+FROM route_analyses
+WHERE route_id = sqlc.arg(route_id)::uuid
+ORDER BY analyzed_at DESC
+LIMIT 1;
+
+-- name: ListRouteCategoryScores :many
+SELECT
+    route_analysis_id::text,
+    category,
+    score
+FROM route_category_scores
+WHERE route_analysis_id = sqlc.arg(route_analysis_id)::uuid
+ORDER BY category;
