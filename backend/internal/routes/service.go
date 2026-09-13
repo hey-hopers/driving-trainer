@@ -66,7 +66,8 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 		return AnalyzeRouteResponse{}, fmt.Errorf("decode route polyline6: %w", err)
 	}
 
-	segments, events := AnalyzeElevation(segmentsOrWholeRoute(route, coordinates), route.ElevationProfile)
+	segments, elevationEvents := AnalyzeElevation(segmentsOrWholeRoute(route, coordinates), route.ElevationProfile)
+	events := append(elevationEvents, AnalyzeCurves(segments)...)
 
 	persistedRoute, err := s.store.CreateRoute(ctx, NewRoute{
 		Source:          "valhalla",
