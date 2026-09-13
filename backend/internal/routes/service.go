@@ -71,6 +71,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 	events := append(elevationEvents, AnalyzeCurves(segments)...)
 	roadEvents := append(AnalyzeRoadEvents(route.RoadEventHints), AnalyzeSegmentRoadEvents(segments)...)
 	events = append(events, dedupeRoadEvents(roadEvents)...)
+	events = append(events, AnalyzeCompoundEvents(events, route.DistanceMeters)...)
 
 	persistedRoute, err := s.store.CreateRoute(ctx, NewRoute{
 		Source:          "valhalla",

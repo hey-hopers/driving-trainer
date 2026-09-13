@@ -286,6 +286,7 @@ Current event sources:
 * Slope analysis produces `HILL` and `STEEP_HILL`.
 * Geometry analysis produces `CURVE`, `SHARP_CURVE` and `CURVE_SEQUENCE`.
 * Valhalla road attributes and segment transitions produce `INTERSECTION`, `COMPLEX_INTERSECTION`, `ROUNDABOUT`, `HIGHWAY_ENTRY` and `HIGHWAY_EXIT`.
+* Compound event analysis associates nearby route events and route-boundary stop contexts to produce `HILL_STOP` and additional `COMPLEX_INTERSECTION` events.
 
 Known data-source limitation:
 

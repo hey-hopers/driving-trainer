@@ -62,6 +62,7 @@ Alternativa com `psql` no container Docker:
 cd ..
 Get-Content .\backend\migrations\000001_init.up.sql | docker compose exec -T postgres psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
 Get-Content .\backend\migrations\000002_add_route_original_polyline.up.sql | docker compose exec -T postgres psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
+Get-Content .\backend\migrations\000003_add_route_segment_road_use.up.sql | docker compose exec -T postgres psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
 cd backend
 ```
 
@@ -87,6 +88,8 @@ Observacao: `route.polyline` contem uma polyline6 retornada pelo Valhalla.
 Quando o Valhalla local tiver DEM de elevacao disponivel, a resposta tambem inclui metricas de inclinacao nos segmentos e eventos `HILL` / `STEEP_HILL`.
 A resposta tambem pode incluir eventos de curva detectados pela geometria da rota: `CURVE`, `SHARP_CURVE` e `CURVE_SEQUENCE`.
 A resposta tambem pode incluir eventos viarios detectados por atributos do Valhalla e por transicoes entre segmentos: `INTERSECTION`, `COMPLEX_INTERSECTION`, `ROUNDABOUT`, `HIGHWAY_ENTRY` e `HIGHWAY_EXIT`.
+A resposta tambem pode incluir eventos compostos detectados por associacao deterministica entre eventos proximos: `HILL_STOP` e `COMPLEX_INTERSECTION`.
+`HILL_STOP` pode ser produzido por uma parada real proxima a uma ladeira ou pelo inicio/fim da rota ocorrer em uma ladeira, indicado por `metadata.stopContext` como `route_start` ou `route_end`.
 
 Observacao: `STOP` e `TRAFFIC_LIGHT` existem como tipos de evento no dominio, mas dependem de dados que nao foram expostos pela integracao atual com `trace_attributes` durante a validacao local. Para esses eventos, pode ser necessario enriquecer a rota futuramente com Valhalla tiles, `/locate`, atributos customizados do Valhalla ou dados OSM/PostGIS.
 

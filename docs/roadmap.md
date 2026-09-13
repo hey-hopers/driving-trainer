@@ -294,6 +294,20 @@ Definition of Done:
 
 The system can distinguish a simple hill from situations such as a mandatory stop on an incline.
 
+Status:
+
+Implemented in the Go route domain layer.
+
+* `HILL_STOP` is detected when a `HILL` or `STEEP_HILL` event is near a `STOP` event along the route.
+* `HILL_STOP` is also detected when a route starts or ends on a `HILL` or `STEEP_HILL`, using the route boundary as a stopped-vehicle context.
+* `COMPLEX_INTERSECTION` can also be inferred from a nearby `INTERSECTION` plus `STOP`, `TRAFFIC_LIGHT` or `ROUNDABOUT` when Valhalla/source hints did not already classify it as complex.
+* Compound events are deterministic, persisted through the existing `route_events` table and returned by `POST /api/v1/routes/analyze` and `GET /api/v1/routes/{id}`.
+
+Notes:
+
+* Reliable `HILL_STOP` coverage still depends on the routing/source data exposing STOP events.
+* Difficulty scoring remains placeholder-level until M8.
+
 ---
 
 # M8 — Difficulty Engine V1
