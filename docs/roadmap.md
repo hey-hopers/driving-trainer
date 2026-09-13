@@ -197,6 +197,8 @@ A route containing relevant elevation changes produces structured hill events an
 
 # M5 — Curve Analysis
 
+Status: Completed
+
 Goal:
 
 Identify driving-relevant curves.
@@ -211,6 +213,14 @@ Tasks:
 * create CURVE event
 * create SHARP_CURVE event
 * create CURVE_SEQUENCE event
+
+Completed notes:
+
+* Route segment geometry is analyzed with deterministic heading-change rules.
+* Continuous same-direction heading changes produce `CURVE` or `SHARP_CURVE` events.
+* Isolated turns at segment boundaries are filtered to reduce maneuver-turn false positives.
+* Nearby curve events are grouped into `CURVE_SEQUENCE` events.
+* Curve events are persisted through the existing `route_events` table and returned by `POST /api/v1/routes/analyze` and `GET /api/v1/routes/{id}`.
 
 Definition of Done:
 

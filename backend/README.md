@@ -85,6 +85,7 @@ O endpoint chama o Valhalla e retorna distancia, duracao e polyline real da rota
 
 Observacao: `route.polyline` contem uma polyline6 retornada pelo Valhalla.
 Quando o Valhalla local tiver DEM de elevacao disponivel, a resposta tambem inclui metricas de inclinacao nos segmentos e eventos `HILL` / `STEEP_HILL`.
+A resposta tambem pode incluir eventos de curva detectados pela geometria da rota: `CURVE`, `SHARP_CURVE` e `CURVE_SEQUENCE`.
 
 ### PowerShell
 
@@ -128,7 +129,7 @@ Resposta esperada:
   },
   "events": [
     {
-      "type": "HILL",
+      "type": "CURVE",
       "position": {
         "latitude": -26.91,
         "longitude": -49.07
@@ -136,9 +137,9 @@ Resposta esperada:
       "routeDistanceMeters": 850,
       "difficultyScore": 4.8,
       "metadata": {
-        "direction": "uphill",
-        "inclineAvgPercent": 3.2,
-        "inclineMaxPercent": 4
+        "direction": "right",
+        "totalTurnDegrees": 42.5,
+        "lengthMeters": 80
       }
     }
   ]
