@@ -463,4 +463,8 @@ When completing a development task:
 * mention any tests not run
 * provide commands to validate the change locally
 
+When database inspection is needed, provide the exact SQL query for the user to run in DBeaver.
+
+When HTTP request validation is needed, provide Postman-ready request details, including method, URL, headers and raw JSON body when applicable.
+
 If a requested implementation conflicts with this architecture, explain the conflict before introducing a major architectural change.
