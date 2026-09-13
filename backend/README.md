@@ -248,3 +248,15 @@ curl -X POST http://localhost:8080/api/v1/routes/analyze \
 ```powershell
 Invoke-RestMethod http://localhost:8080/health
 ```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+The API also logs health checks in the terminal:
+
+```text
+health check received from 127.0.0.1:<port>
+```

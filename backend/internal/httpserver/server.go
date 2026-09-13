@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"driving-trainer/backend/internal/routes"
@@ -22,6 +23,7 @@ func NewRouter(routeHandler *routes.Handler) http.Handler {
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("health check received from %s", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

@@ -355,6 +355,8 @@ Implemented:
 
 # M9 — Android Foundation
 
+Status: Completed
+
 Goal:
 
 Create the first Android application.
@@ -378,6 +380,16 @@ Tasks:
 Definition of Done:
 
 Android can communicate with the local Go backend.
+
+Implemented:
+
+* Created the first Android application in `apps/mobile`.
+* Configured a single `:app` module with Kotlin, Jetpack Compose, Hilt, Coroutines / Flow and Retrofit / OkHttp networking.
+* Added a backend health check flow that calls `GET /health` on the local Go API.
+* Added a basic Compose design system and initial navigation with a Home screen.
+* Validated Android build successfully from Android Studio.
+* Validated Android Emulator to local Go backend communication through `GET /health`.
+* Backend now logs received health checks for local validation.
 
 ---
 

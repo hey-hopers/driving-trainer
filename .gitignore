@@ -34,5 +34,11 @@ infrastructure/valhalla/custom_files/*
 !infrastructure/valhalla/custom_files/.gitkeep
 
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
+
+# Android / Gradle
+.gradle/
+build/
+apps/mobile/**/build/
+apps/mobile/local.properties
