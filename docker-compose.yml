@@ -36,7 +36,7 @@ services:
 
     environment:
       tile_urls: https://download.geofabrik.de/south-america/brazil/sul-latest.osm.pbf
-      build_elevation: "False"
+      build_elevation: "True"
       build_admins: "True"
       build_time_zones: "True"
       build_tar: "True"

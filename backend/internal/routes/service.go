@@ -16,10 +16,11 @@ type Store interface {
 }
 
 type RouteResult struct {
-	DistanceMeters  int
-	DurationSeconds int
-	Polyline        string
-	Segments        []RouteSegmentResult
+	DistanceMeters   int
+	DurationSeconds  int
+	Polyline         string
+	Segments         []RouteSegmentResult
+	ElevationProfile []ElevationSample
 }
 
 type NewRoute struct {
@@ -29,6 +30,7 @@ type NewRoute struct {
 	DurationSeconds int
 	Polyline        string
 	Segments        []RouteSegmentResult
+	Events          []RouteEventResult
 }
 
 var (
@@ -64,13 +66,16 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 		return AnalyzeRouteResponse{}, fmt.Errorf("decode route polyline6: %w", err)
 	}
 
+	segments, events := AnalyzeElevation(segmentsOrWholeRoute(route, coordinates), route.ElevationProfile)
+
 	persistedRoute, err := s.store.CreateRoute(ctx, NewRoute{
 		Source:          "valhalla",
 		Geometry:        coordinates,
 		DistanceMeters:  route.DistanceMeters,
 		DurationSeconds: route.DurationSeconds,
 		Polyline:        route.Polyline,
-		Segments:        segmentsOrWholeRoute(route, coordinates),
+		Segments:        segments,
+		Events:          events,
 	})
 	if err != nil {
 		return AnalyzeRouteResponse{}, fmt.Errorf("%w: %v", ErrRoutePersistence, err)
@@ -88,7 +93,7 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 			Difficulty: 0,
 			Categories: RouteCategoryScores{},
 		},
-		Events: []any{},
+		Events: eventResponses(persistedRoute.Events),
 	}, nil
 }
 
@@ -116,6 +121,7 @@ func (s *Service) Get(ctx context.Context, id string) (GetRouteResponse, error) 
 			Segments:        segmentResponses(route.Segments),
 			CreatedAt:       route.CreatedAt,
 		},
+		Events: eventResponses(route.Events),
 	}, nil
 }
 
@@ -147,6 +153,27 @@ func segmentResponses(segments []RouteSegment) []RouteSegmentResponse {
 			RoadName:        segment.RoadName,
 			RoadUse:         segment.RoadUse,
 			SpeedLimitKph:   segment.SpeedLimitKph,
+			ElevationStartM: segment.ElevationStartM,
+			ElevationEndM:   segment.ElevationEndM,
+			InclineAvgPct:   segment.InclineAvgPct,
+			InclineMaxPct:   segment.InclineMaxPct,
+		})
+	}
+	return responses
+}
+
+func eventResponses(events []RouteEvent) []RouteEventResponse {
+	responses := make([]RouteEventResponse, 0, len(events))
+	for _, event := range events {
+		responses = append(responses, RouteEventResponse{
+			ID:                  event.ID,
+			SegmentID:           event.SegmentID,
+			Type:                event.Type,
+			Position:            event.Position,
+			RouteDistanceMeters: event.RouteDistanceMeters,
+			DifficultyScore:     event.DifficultyScore,
+			Metadata:            event.Metadata,
+			CreatedAt:           event.CreatedAt,
 		})
 	}
 	return responses

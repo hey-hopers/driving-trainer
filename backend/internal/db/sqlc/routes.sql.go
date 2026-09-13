@@ -76,6 +76,85 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Creat
 	return i, err
 }
 
+const createRouteEvent = `-- name: CreateRouteEvent :one
+INSERT INTO route_events (
+    id,
+    route_id,
+    segment_id,
+    type,
+    position,
+    route_distance_meters,
+    difficulty_score,
+    metadata
+) VALUES (
+    gen_random_uuid(),
+    $1::uuid,
+    $2::uuid,
+    $3,
+    ST_GeogFromText($4::text),
+    $5,
+    $6,
+    $7
+)
+RETURNING
+    id::text,
+    route_id::text,
+    COALESCE(segment_id::text, '')::text AS segment_id,
+    type,
+    ST_AsGeoJSON(position::geometry)::text AS position_geojson,
+    route_distance_meters,
+    difficulty_score,
+    metadata,
+    created_at
+`
+
+type CreateRouteEventParams struct {
+	RouteID             pgtype.UUID
+	SegmentID           pgtype.UUID
+	Type                string
+	PositionWkt         string
+	RouteDistanceMeters pgtype.Int4
+	DifficultyScore     pgtype.Numeric
+	Metadata            []byte
+}
+
+type CreateRouteEventRow struct {
+	ID                  string
+	RouteID             string
+	SegmentID           string
+	Type                string
+	PositionGeojson     string
+	RouteDistanceMeters pgtype.Int4
+	DifficultyScore     pgtype.Numeric
+	Metadata            []byte
+	CreatedAt           pgtype.Timestamptz
+}
+
+func (q *Queries) CreateRouteEvent(ctx context.Context, arg CreateRouteEventParams) (CreateRouteEventRow, error) {
+	row := q.db.QueryRow(ctx, createRouteEvent,
+		arg.RouteID,
+		arg.SegmentID,
+		arg.Type,
+		arg.PositionWkt,
+		arg.RouteDistanceMeters,
+		arg.DifficultyScore,
+		arg.Metadata,
+	)
+	var i CreateRouteEventRow
+	err := row.Scan(
+		&i.ID,
+		&i.RouteID,
+		&i.SegmentID,
+		&i.Type,
+		&i.PositionGeojson,
+		&i.RouteDistanceMeters,
+		&i.DifficultyScore,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createRouteSegment = `-- name: CreateRouteSegment :one
 INSERT INTO route_segments (
     id,
@@ -87,7 +166,11 @@ INSERT INTO route_segments (
     road_class,
     road_name,
     road_use,
-    speed_limit_kph
+    speed_limit_kph,
+    elevation_start_m,
+    elevation_end_m,
+    incline_avg_percent,
+    incline_max_percent
 ) VALUES (
     gen_random_uuid(),
     $1::uuid,
@@ -98,7 +181,11 @@ INSERT INTO route_segments (
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10,
+    $11,
+    $12,
+    $13
 )
 RETURNING
     id::text,
@@ -111,33 +198,45 @@ RETURNING
     road_name,
     road_use,
     speed_limit_kph,
+    elevation_start_m,
+    elevation_end_m,
+    incline_avg_percent,
+    incline_max_percent,
     created_at
 `
 
 type CreateRouteSegmentParams struct {
-	RouteID         pgtype.UUID
-	Sequence        int32
-	GeometryWkt     string
-	DistanceMeters  int32
-	DurationSeconds pgtype.Int4
-	RoadClass       pgtype.Text
-	RoadName        pgtype.Text
-	RoadUse         pgtype.Text
-	SpeedLimitKph   pgtype.Int4
+	RouteID           pgtype.UUID
+	Sequence          int32
+	GeometryWkt       string
+	DistanceMeters    int32
+	DurationSeconds   pgtype.Int4
+	RoadClass         pgtype.Text
+	RoadName          pgtype.Text
+	RoadUse           pgtype.Text
+	SpeedLimitKph     pgtype.Int4
+	ElevationStartM   pgtype.Float8
+	ElevationEndM     pgtype.Float8
+	InclineAvgPercent pgtype.Float8
+	InclineMaxPercent pgtype.Float8
 }
 
 type CreateRouteSegmentRow struct {
-	ID              string
-	RouteID         string
-	Sequence        int32
-	GeometryGeojson string
-	DistanceMeters  int32
-	DurationSeconds pgtype.Int4
-	RoadClass       pgtype.Text
-	RoadName        pgtype.Text
-	RoadUse         pgtype.Text
-	SpeedLimitKph   pgtype.Int4
-	CreatedAt       pgtype.Timestamptz
+	ID                string
+	RouteID           string
+	Sequence          int32
+	GeometryGeojson   string
+	DistanceMeters    int32
+	DurationSeconds   pgtype.Int4
+	RoadClass         pgtype.Text
+	RoadName          pgtype.Text
+	RoadUse           pgtype.Text
+	SpeedLimitKph     pgtype.Int4
+	ElevationStartM   pgtype.Float8
+	ElevationEndM     pgtype.Float8
+	InclineAvgPercent pgtype.Float8
+	InclineMaxPercent pgtype.Float8
+	CreatedAt         pgtype.Timestamptz
 }
 
 func (q *Queries) CreateRouteSegment(ctx context.Context, arg CreateRouteSegmentParams) (CreateRouteSegmentRow, error) {
@@ -151,6 +250,10 @@ func (q *Queries) CreateRouteSegment(ctx context.Context, arg CreateRouteSegment
 		arg.RoadName,
 		arg.RoadUse,
 		arg.SpeedLimitKph,
+		arg.ElevationStartM,
+		arg.ElevationEndM,
+		arg.InclineAvgPercent,
+		arg.InclineMaxPercent,
 	)
 	var i CreateRouteSegmentRow
 	err := row.Scan(
@@ -164,6 +267,10 @@ func (q *Queries) CreateRouteSegment(ctx context.Context, arg CreateRouteSegment
 		&i.RoadName,
 		&i.RoadUse,
 		&i.SpeedLimitKph,
+		&i.ElevationStartM,
+		&i.ElevationEndM,
+		&i.InclineAvgPercent,
+		&i.InclineMaxPercent,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -207,6 +314,64 @@ func (q *Queries) GetRouteByID(ctx context.Context, id pgtype.UUID) (GetRouteByI
 	return i, err
 }
 
+const listRouteEvents = `-- name: ListRouteEvents :many
+SELECT
+    id::text,
+    route_id::text,
+    COALESCE(segment_id::text, '')::text AS segment_id,
+    type,
+    ST_AsGeoJSON(position::geometry)::text AS position_geojson,
+    route_distance_meters,
+    difficulty_score,
+    metadata,
+    created_at
+FROM route_events
+WHERE route_id = $1::uuid
+ORDER BY route_distance_meters, created_at
+`
+
+type ListRouteEventsRow struct {
+	ID                  string
+	RouteID             string
+	SegmentID           string
+	Type                string
+	PositionGeojson     string
+	RouteDistanceMeters pgtype.Int4
+	DifficultyScore     pgtype.Numeric
+	Metadata            []byte
+	CreatedAt           pgtype.Timestamptz
+}
+
+func (q *Queries) ListRouteEvents(ctx context.Context, routeID pgtype.UUID) ([]ListRouteEventsRow, error) {
+	rows, err := q.db.Query(ctx, listRouteEvents, routeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRouteEventsRow
+	for rows.Next() {
+		var i ListRouteEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RouteID,
+			&i.SegmentID,
+			&i.Type,
+			&i.PositionGeojson,
+			&i.RouteDistanceMeters,
+			&i.DifficultyScore,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRouteSegments = `-- name: ListRouteSegments :many
 SELECT
     id::text,
@@ -219,6 +384,10 @@ SELECT
     road_name,
     road_use,
     speed_limit_kph,
+    elevation_start_m,
+    elevation_end_m,
+    incline_avg_percent,
+    incline_max_percent,
     created_at
 FROM route_segments
 WHERE route_id = $1::uuid
@@ -226,17 +395,21 @@ ORDER BY sequence
 `
 
 type ListRouteSegmentsRow struct {
-	ID              string
-	RouteID         string
-	Sequence        int32
-	GeometryGeojson string
-	DistanceMeters  int32
-	DurationSeconds pgtype.Int4
-	RoadClass       pgtype.Text
-	RoadName        pgtype.Text
-	RoadUse         pgtype.Text
-	SpeedLimitKph   pgtype.Int4
-	CreatedAt       pgtype.Timestamptz
+	ID                string
+	RouteID           string
+	Sequence          int32
+	GeometryGeojson   string
+	DistanceMeters    int32
+	DurationSeconds   pgtype.Int4
+	RoadClass         pgtype.Text
+	RoadName          pgtype.Text
+	RoadUse           pgtype.Text
+	SpeedLimitKph     pgtype.Int4
+	ElevationStartM   pgtype.Float8
+	ElevationEndM     pgtype.Float8
+	InclineAvgPercent pgtype.Float8
+	InclineMaxPercent pgtype.Float8
+	CreatedAt         pgtype.Timestamptz
 }
 
 func (q *Queries) ListRouteSegments(ctx context.Context, routeID pgtype.UUID) ([]ListRouteSegmentsRow, error) {
@@ -259,6 +432,10 @@ func (q *Queries) ListRouteSegments(ctx context.Context, routeID pgtype.UUID) ([
 			&i.RoadName,
 			&i.RoadUse,
 			&i.SpeedLimitKph,
+			&i.ElevationStartM,
+			&i.ElevationEndM,
+			&i.InclineAvgPercent,
+			&i.InclineMaxPercent,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

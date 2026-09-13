@@ -84,6 +84,7 @@ sqlc generate
 O endpoint chama o Valhalla e retorna distancia, duracao e polyline real da rota.
 
 Observacao: `route.polyline` contem uma polyline6 retornada pelo Valhalla.
+Quando o Valhalla local tiver DEM de elevacao disponivel, a resposta tambem inclui metricas de inclinacao nos segmentos e eventos `HILL` / `STEEP_HILL`.
 
 ### PowerShell
 
@@ -125,7 +126,22 @@ Resposta esperada:
       "highSpeed": 0
     }
   },
-  "events": []
+  "events": [
+    {
+      "type": "HILL",
+      "position": {
+        "latitude": -26.91,
+        "longitude": -49.07
+      },
+      "routeDistanceMeters": 850,
+      "difficultyScore": 4.8,
+      "metadata": {
+        "direction": "uphill",
+        "inclineAvgPercent": 3.2,
+        "inclineMaxPercent": 4
+      }
+    }
+  ]
 }
 ```
 
@@ -165,8 +181,27 @@ Resposta esperada:
     "distanceMeters": 2476,
     "durationSeconds": 376,
     "polyline": "...",
+    "segments": [
+      {
+        "sequence": 0,
+        "geometry": [
+          {
+            "latitude": -26.9194,
+            "longitude": -49.0661
+          },
+          {
+            "latitude": -26.905,
+            "longitude": -49.075
+          }
+        ],
+        "distanceMeters": 2476,
+        "inclineAvgPercent": 3.2,
+        "inclineMaxPercent": 4
+      }
+    ],
     "createdAt": "..."
-  }
+  },
+  "events": []
 }
 ```
 

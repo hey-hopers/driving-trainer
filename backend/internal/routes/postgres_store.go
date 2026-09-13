@@ -75,14 +75,26 @@ func createRouteWithSegments(ctx context.Context, queries *db.Queries, route New
 	}
 
 	segments := make([]RouteSegment, 0, len(route.Segments))
+	segmentIDsBySequence := map[int]string{}
 	for _, segment := range route.Segments {
 		createdSegment, err := createRouteSegment(ctx, queries, created.ID, segment)
 		if err != nil {
 			return Route{}, err
 		}
 		segments = append(segments, createdSegment)
+		segmentIDsBySequence[createdSegment.Sequence] = createdSegment.ID
 	}
 	created.Segments = segments
+
+	events := make([]RouteEvent, 0, len(route.Events))
+	for _, event := range route.Events {
+		createdEvent, err := createRouteEvent(ctx, queries, created.ID, segmentIDsBySequence, event)
+		if err != nil {
+			return Route{}, err
+		}
+		events = append(events, createdEvent)
+	}
+	created.Events = events
 
 	return created, nil
 }
@@ -116,6 +128,12 @@ func (s *PostgresStore) GetRoute(ctx context.Context, id string) (Route, error) 
 	}
 	route.Segments = segments
 
+	events, err := s.listRouteEvents(ctx, route.ID)
+	if err != nil {
+		return Route{}, err
+	}
+	route.Events = events
+
 	return route, nil
 }
 
@@ -131,21 +149,57 @@ func createRouteSegment(ctx context.Context, queries *db.Queries, routeID string
 	}
 
 	row, err := queries.CreateRouteSegment(ctx, db.CreateRouteSegmentParams{
-		RouteID:         parsedRouteID,
-		Sequence:        int32(segment.Sequence),
-		GeometryWkt:     geometryWKT,
-		DistanceMeters:  int32(segment.DistanceMeters),
-		DurationSeconds: nullableInt32(segment.DurationSeconds),
-		RoadClass:       nullableText(segment.RoadClass),
-		RoadName:        nullableText(segment.RoadName),
-		RoadUse:         nullableText(segment.RoadUse),
-		SpeedLimitKph:   nullableInt32(segment.SpeedLimitKph),
+		RouteID:           parsedRouteID,
+		Sequence:          int32(segment.Sequence),
+		GeometryWkt:       geometryWKT,
+		DistanceMeters:    int32(segment.DistanceMeters),
+		DurationSeconds:   nullableInt32(segment.DurationSeconds),
+		RoadClass:         nullableText(segment.RoadClass),
+		RoadName:          nullableText(segment.RoadName),
+		RoadUse:           nullableText(segment.RoadUse),
+		SpeedLimitKph:     nullableInt32(segment.SpeedLimitKph),
+		ElevationStartM:   nullableFloat64(segment.ElevationStartM),
+		ElevationEndM:     nullableFloat64(segment.ElevationEndM),
+		InclineAvgPercent: nullableFloat64(segment.InclineAvgPct),
+		InclineMaxPercent: nullableFloat64(segment.InclineMaxPct),
 	})
 	if err != nil {
 		return RouteSegment{}, err
 	}
 
 	return routeSegmentFromCreateRow(row)
+}
+
+func createRouteEvent(ctx context.Context, queries *db.Queries, routeID string, segmentIDsBySequence map[int]string, event RouteEventResult) (RouteEvent, error) {
+	parsedRouteID, err := uuid(routeID)
+	if err != nil {
+		return RouteEvent{}, err
+	}
+
+	positionWKT, err := pointWKT(event.Position)
+	if err != nil {
+		return RouteEvent{}, err
+	}
+
+	metadata, err := json.Marshal(event.Metadata)
+	if err != nil {
+		return RouteEvent{}, err
+	}
+
+	row, err := queries.CreateRouteEvent(ctx, db.CreateRouteEventParams{
+		RouteID:             parsedRouteID,
+		SegmentID:           nullableUUID(segmentIDsBySequence[event.SegmentSequence]),
+		Type:                event.Type,
+		PositionWkt:         positionWKT,
+		RouteDistanceMeters: nullableInt32(event.RouteDistanceMeters),
+		DifficultyScore:     nullableNumeric(event.DifficultyScore),
+		Metadata:            metadata,
+	})
+	if err != nil {
+		return RouteEvent{}, err
+	}
+
+	return routeEventFromCreateRow(row)
 }
 
 func (s *PostgresStore) listRouteSegments(ctx context.Context, routeID string) ([]RouteSegment, error) {
@@ -169,6 +223,29 @@ func (s *PostgresStore) listRouteSegments(ctx context.Context, routeID string) (
 	}
 
 	return segments, nil
+}
+
+func (s *PostgresStore) listRouteEvents(ctx context.Context, routeID string) ([]RouteEvent, error) {
+	parsedRouteID, err := uuid(routeID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.queries.ListRouteEvents(ctx, parsedRouteID)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]RouteEvent, 0, len(rows))
+	for _, row := range rows {
+		event, err := routeEventFromListRow(row)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+
+	return events, nil
 }
 
 func routeFromCreateRow(row db.CreateRouteRow) (Route, error) {
@@ -222,6 +299,10 @@ func routeSegmentFromCreateRow(row db.CreateRouteSegmentRow) (RouteSegment, erro
 		RoadName:        textOrEmpty(row.RoadName),
 		RoadUse:         textOrEmpty(row.RoadUse),
 		SpeedLimitKph:   intOrZero(row.SpeedLimitKph),
+		ElevationStartM: floatPtrOrNil(row.ElevationStartM),
+		ElevationEndM:   floatPtrOrNil(row.ElevationEndM),
+		InclineAvgPct:   floatPtrOrNil(row.InclineAvgPercent),
+		InclineMaxPct:   floatPtrOrNil(row.InclineMaxPercent),
 		CreatedAt:       row.CreatedAt.Time,
 	}, nil
 }
@@ -243,7 +324,75 @@ func routeSegmentFromListRow(row db.ListRouteSegmentsRow) (RouteSegment, error) 
 		RoadName:        textOrEmpty(row.RoadName),
 		RoadUse:         textOrEmpty(row.RoadUse),
 		SpeedLimitKph:   intOrZero(row.SpeedLimitKph),
+		ElevationStartM: floatPtrOrNil(row.ElevationStartM),
+		ElevationEndM:   floatPtrOrNil(row.ElevationEndM),
+		InclineAvgPct:   floatPtrOrNil(row.InclineAvgPercent),
+		InclineMaxPct:   floatPtrOrNil(row.InclineMaxPercent),
 		CreatedAt:       row.CreatedAt.Time,
+	}, nil
+}
+
+func routeEventFromCreateRow(row db.CreateRouteEventRow) (RouteEvent, error) {
+	return routeEventFromFields(
+		row.ID,
+		row.RouteID,
+		row.SegmentID,
+		row.Type,
+		row.PositionGeojson,
+		row.RouteDistanceMeters,
+		row.DifficultyScore,
+		row.Metadata,
+		row.CreatedAt,
+	)
+}
+
+func routeEventFromListRow(row db.ListRouteEventsRow) (RouteEvent, error) {
+	return routeEventFromFields(
+		row.ID,
+		row.RouteID,
+		row.SegmentID,
+		row.Type,
+		row.PositionGeojson,
+		row.RouteDistanceMeters,
+		row.DifficultyScore,
+		row.Metadata,
+		row.CreatedAt,
+	)
+}
+
+func routeEventFromFields(
+	id string,
+	routeID string,
+	segmentID string,
+	eventType string,
+	positionGeoJSON string,
+	routeDistanceMeters pgtype.Int4,
+	difficultyScore pgtype.Numeric,
+	metadataBytes []byte,
+	createdAt pgtype.Timestamptz,
+) (RouteEvent, error) {
+	position, err := coordinateFromPointGeoJSON(positionGeoJSON)
+	if err != nil {
+		return RouteEvent{}, err
+	}
+
+	metadata := map[string]any{}
+	if len(metadataBytes) > 0 {
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			return RouteEvent{}, fmt.Errorf("decode route event metadata: %w", err)
+		}
+	}
+
+	return RouteEvent{
+		ID:                  id,
+		RouteID:             routeID,
+		SegmentID:           segmentID,
+		Type:                eventType,
+		Position:            position,
+		RouteDistanceMeters: intOrZero(routeDistanceMeters),
+		DifficultyScore:     numericOrZero(difficultyScore),
+		Metadata:            metadata,
+		CreatedAt:           createdAt.Time,
 	}, nil
 }
 
@@ -264,6 +413,15 @@ func lineStringWKT(coordinates []Coordinate) (string, error) {
 	return "LINESTRING(" + strings.Join(points, ",") + ")", nil
 }
 
+func pointWKT(coordinate Coordinate) (string, error) {
+	if coordinate.Latitude < -90 || coordinate.Latitude > 90 ||
+		coordinate.Longitude < -180 || coordinate.Longitude > 180 {
+		return "", errors.New("route event position contains invalid coordinate")
+	}
+
+	return "POINT(" + formatFloat(coordinate.Longitude) + " " + formatFloat(coordinate.Latitude) + ")", nil
+}
+
 func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
@@ -271,6 +429,11 @@ func formatFloat(value float64) string {
 type lineStringGeoJSON struct {
 	Type        string      `json:"type"`
 	Coordinates [][]float64 `json:"coordinates"`
+}
+
+type pointGeoJSON struct {
+	Type        string    `json:"type"`
+	Coordinates []float64 `json:"coordinates"`
 }
 
 func coordinatesFromGeoJSON(value string) ([]Coordinate, error) {
@@ -299,6 +462,24 @@ func coordinatesFromGeoJSON(value string) ([]Coordinate, error) {
 	return coordinates, nil
 }
 
+func coordinateFromPointGeoJSON(value string) (Coordinate, error) {
+	var geometry pointGeoJSON
+	if err := json.Unmarshal([]byte(value), &geometry); err != nil {
+		return Coordinate{}, fmt.Errorf("decode route event position geojson: %w", err)
+	}
+	if geometry.Type != "Point" {
+		return Coordinate{}, fmt.Errorf("expected Point geometry, got %q", geometry.Type)
+	}
+	if len(geometry.Coordinates) != 2 {
+		return Coordinate{}, errors.New("route event position must contain longitude and latitude")
+	}
+
+	return Coordinate{
+		Longitude: geometry.Coordinates[0],
+		Latitude:  geometry.Coordinates[1],
+	}, nil
+}
+
 func uuid(value string) (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if err := id.Scan(value); err != nil {
@@ -321,6 +502,35 @@ func nullableText(value string) pgtype.Text {
 	return pgtype.Text{String: value, Valid: true}
 }
 
+func nullableUUID(value string) pgtype.UUID {
+	if value == "" {
+		return pgtype.UUID{}
+	}
+	id, err := uuid(value)
+	if err != nil {
+		return pgtype.UUID{}
+	}
+	return id
+}
+
+func nullableFloat64(value *float64) pgtype.Float8 {
+	if value == nil {
+		return pgtype.Float8{}
+	}
+	return pgtype.Float8{Float64: *value, Valid: true}
+}
+
+func nullableNumeric(value float64) pgtype.Numeric {
+	if value == 0 {
+		return pgtype.Numeric{}
+	}
+	var numeric pgtype.Numeric
+	if err := numeric.Scan(formatFloat(value)); err != nil {
+		return pgtype.Numeric{}
+	}
+	return numeric
+}
+
 func intOrZero(value pgtype.Int4) int {
 	if !value.Valid {
 		return 0
@@ -333,4 +543,19 @@ func textOrEmpty(value pgtype.Text) string {
 		return ""
 	}
 	return value.String
+}
+
+func floatPtrOrNil(value pgtype.Float8) *float64 {
+	if !value.Valid {
+		return nil
+	}
+	return &value.Float64
+}
+
+func numericOrZero(value pgtype.Numeric) float64 {
+	number, err := value.Float64Value()
+	if err != nil || !number.Valid {
+		return 0
+	}
+	return number.Float64
 }

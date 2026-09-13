@@ -21,6 +21,8 @@ func TestCalculateRoute(t *testing.T) {
 			handleRouteTestRequest(t, w, r)
 		case "/trace_attributes":
 			handleTraceAttributesTestRequest(t, w, r)
+		case "/height":
+			handleHeightTestRequest(t, w, r)
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -64,6 +66,12 @@ func TestCalculateRoute(t *testing.T) {
 	if result.Segments[0].SpeedLimitKph != 40 {
 		t.Fatalf("expected speed limit 40, got %d", result.Segments[0].SpeedLimitKph)
 	}
+	if len(result.ElevationProfile) != 2 {
+		t.Fatalf("expected 2 elevation samples, got %d", len(result.ElevationProfile))
+	}
+	if result.ElevationProfile[1].ElevationMeters != 18 {
+		t.Fatalf("expected second elevation 18, got %f", result.ElevationProfile[1].ElevationMeters)
+	}
 }
 
 func TestCalculateRouteFallsBackToManeuversWhenTraceAttributesFails(t *testing.T) {
@@ -73,6 +81,8 @@ func TestCalculateRouteFallsBackToManeuversWhenTraceAttributesFails(t *testing.T
 			handleRouteTestRequest(t, w, r)
 		case "/trace_attributes":
 			w.WriteHeader(http.StatusBadRequest)
+		case "/height":
+			handleHeightTestRequest(t, w, r)
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -169,6 +179,32 @@ func handleTraceAttributesTestRequest(t *testing.T, w http.ResponseWriter, r *ht
 				"begin_shape_index": 0,
 				"end_shape_index": 1
 			}
+		]
+	}`))
+}
+
+func handleHeightTestRequest(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Helper()
+
+	var request heightRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		t.Fatalf("expected valid height request JSON: %v", err)
+	}
+	if request.EncodedPolyline != "??AA" {
+		t.Fatalf("expected encoded polyline ??AA, got %q", request.EncodedPolyline)
+	}
+	if request.ShapeFormat != "polyline6" {
+		t.Fatalf("expected shape format polyline6, got %q", request.ShapeFormat)
+	}
+	if !request.Range {
+		t.Fatal("expected range height request")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{
+		"range_height": [
+			[0, 10],
+			[2476, 18]
 		]
 	}`))
 }

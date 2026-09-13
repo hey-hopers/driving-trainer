@@ -13,9 +13,9 @@ type AnalyzeRouteRequest struct {
 }
 
 type AnalyzeRouteResponse struct {
-	Route    RouteSummary  `json:"route"`
-	Analysis RouteAnalysis `json:"analysis"`
-	Events   []any         `json:"events"`
+	Route    RouteSummary         `json:"route"`
+	Analysis RouteAnalysis        `json:"analysis"`
+	Events   []RouteEventResponse `json:"events"`
 }
 
 type RouteSummary struct {
@@ -34,6 +34,7 @@ type Route struct {
 	DurationSeconds int
 	Polyline        string
 	Segments        []RouteSegment
+	Events          []RouteEvent
 	CreatedAt       time.Time
 }
 
@@ -48,6 +49,10 @@ type RouteSegment struct {
 	RoadName        string
 	RoadUse         string
 	SpeedLimitKph   int
+	ElevationStartM *float64
+	ElevationEndM   *float64
+	InclineAvgPct   *float64
+	InclineMaxPct   *float64
 	CreatedAt       time.Time
 }
 
@@ -60,10 +65,41 @@ type RouteSegmentResult struct {
 	RoadName        string
 	RoadUse         string
 	SpeedLimitKph   int
+	ElevationStartM *float64
+	ElevationEndM   *float64
+	InclineAvgPct   *float64
+	InclineMaxPct   *float64
+}
+
+type ElevationSample struct {
+	RouteDistanceMeters float64
+	ElevationMeters     float64
+}
+
+type RouteEvent struct {
+	ID                  string
+	RouteID             string
+	SegmentID           string
+	Type                string
+	Position            Coordinate
+	RouteDistanceMeters int
+	DifficultyScore     float64
+	Metadata            map[string]any
+	CreatedAt           time.Time
+}
+
+type RouteEventResult struct {
+	SegmentSequence     int
+	Type                string
+	Position            Coordinate
+	RouteDistanceMeters int
+	DifficultyScore     float64
+	Metadata            map[string]any
 }
 
 type GetRouteResponse struct {
-	Route PersistedRouteResponse `json:"route"`
+	Route  PersistedRouteResponse `json:"route"`
+	Events []RouteEventResponse   `json:"events"`
 }
 
 type PersistedRouteResponse struct {
@@ -87,6 +123,21 @@ type RouteSegmentResponse struct {
 	RoadName        string       `json:"roadName,omitempty"`
 	RoadUse         string       `json:"roadUse,omitempty"`
 	SpeedLimitKph   int          `json:"speedLimitKph,omitempty"`
+	ElevationStartM *float64     `json:"elevationStartMeters,omitempty"`
+	ElevationEndM   *float64     `json:"elevationEndMeters,omitempty"`
+	InclineAvgPct   *float64     `json:"inclineAvgPercent,omitempty"`
+	InclineMaxPct   *float64     `json:"inclineMaxPercent,omitempty"`
+}
+
+type RouteEventResponse struct {
+	ID                  string         `json:"id,omitempty"`
+	SegmentID           string         `json:"segmentId,omitempty"`
+	Type                string         `json:"type"`
+	Position            Coordinate     `json:"position"`
+	RouteDistanceMeters int            `json:"routeDistanceMeters,omitempty"`
+	DifficultyScore     float64        `json:"difficultyScore,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	CreatedAt           time.Time      `json:"createdAt,omitempty"`
 }
 
 type RouteAnalysis struct {

@@ -115,6 +115,44 @@ Observacoes:
 * `trip.summary.time` vem em segundos.
 * `trip.legs[0].shape` e uma polyline com precisao 6, conhecida como polyline6.
 
+## Elevacao para M4
+
+O `docker-compose.yml` deixa `build_elevation` habilitado para que o Valhalla construa dados de elevacao locais junto com os tiles:
+
+```text
+build_elevation: "True"
+```
+
+Com elevacao disponivel, a API Go chama tambem o endpoint `/height` do Valhalla usando a polyline6 da rota. O perfil retornado e usado para calcular:
+
+* elevacao inicial/final dos segmentos;
+* inclinacao media;
+* inclinacao maxima;
+* eventos `HILL`;
+* eventos `STEEP_HILL`.
+
+Se a pasta `infrastructure/valhalla/custom_files` ja tiver tiles criados sem elevacao, remova os arquivos gerados ou force um rebuild antes de validar a M4. O primeiro build com DEM pode levar mais tempo porque o container precisa baixar e preparar arquivos adicionais de elevacao.
+
+Validacao direta do endpoint de elevacao:
+
+```powershell
+$shape = "<polyline6-retornada-pelo-endpoint-route>"
+
+$body = @{
+  encoded_polyline = $shape
+  shape_format = "polyline6"
+  range = $true
+  resample_distance = 25
+  height_precision = 1
+} | ConvertTo-Json -Depth 3
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8002/height" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
 ## Validar com curl
 
 ```bash
@@ -174,5 +212,6 @@ Se o container for encerrado durante o build:
 
 * Valhalla Docker scripted image: https://github.com/valhalla/valhalla/blob/master/docker/README.md
 * Valhalla `/route` API: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
+* Valhalla `/height` API: https://valhalla.github.io/valhalla/api/elevation/
 * Valhalla `/status` API: https://valhalla.github.io/valhalla/api/status/
 * Geofabrik Brazil/Sul OSM extract: https://download.geofabrik.de/south-america/brazil/sul.html

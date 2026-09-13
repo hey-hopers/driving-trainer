@@ -93,11 +93,17 @@ func (c *Client) CalculateRoute(ctx context.Context, origin routes.Coordinate, d
 		}
 	}
 
+	elevationProfile, err := c.height(ctx, leg.Shape)
+	if err != nil {
+		elevationProfile = nil
+	}
+
 	return routes.RouteResult{
-		DistanceMeters:  int(math.Round(route.Trip.Summary.Length * 1000)),
-		DurationSeconds: int(math.Round(route.Trip.Summary.Time)),
-		Polyline:        leg.Shape,
-		Segments:        segments,
+		DistanceMeters:   int(math.Round(route.Trip.Summary.Length * 1000)),
+		DurationSeconds:  int(math.Round(route.Trip.Summary.Time)),
+		Polyline:         leg.Shape,
+		Segments:         segments,
+		ElevationProfile: elevationProfile,
 	}, nil
 }
 
@@ -146,6 +152,18 @@ type maneuver struct {
 
 type routeErrorResponse struct {
 	Error string `json:"error"`
+}
+
+type heightRequest struct {
+	EncodedPolyline  string  `json:"encoded_polyline"`
+	ShapeFormat      string  `json:"shape_format"`
+	Range            bool    `json:"range"`
+	ResampleDistance float64 `json:"resample_distance"`
+	HeightPrecision  int     `json:"height_precision"`
+}
+
+type heightResponse struct {
+	RangeHeight [][]*float64 `json:"range_height"`
 }
 
 type traceAttributesRequest struct {
@@ -224,6 +242,57 @@ func (c *Client) traceAttributes(ctx context.Context, encodedPolyline string) ([
 	}
 
 	return attributes.Edges, nil
+}
+
+func (c *Client) height(ctx context.Context, encodedPolyline string) ([]routes.ElevationSample, error) {
+	body, err := json.Marshal(heightRequest{
+		EncodedPolyline:  encodedPolyline,
+		ShapeFormat:      "polyline6",
+		Range:            true,
+		ResampleDistance: 25,
+		HeightPrecision:  1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal valhalla height request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/height", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create valhalla height request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call valhalla height: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
+		var errorResponse routeErrorResponse
+		if err := json.NewDecoder(res.Body).Decode(&errorResponse); err == nil && errorResponse.Error != "" {
+			return nil, fmt.Errorf("valhalla height failed: status %d: %s", res.StatusCode, errorResponse.Error)
+		}
+		return nil, fmt.Errorf("valhalla height failed: status %d", res.StatusCode)
+	}
+
+	var height heightResponse
+	if err := json.NewDecoder(res.Body).Decode(&height); err != nil {
+		return nil, fmt.Errorf("decode valhalla height response: %w", err)
+	}
+
+	samples := make([]routes.ElevationSample, 0, len(height.RangeHeight))
+	for i, pair := range height.RangeHeight {
+		if len(pair) != 2 || pair[0] == nil || pair[1] == nil {
+			return nil, fmt.Errorf("valhalla height sample %d is invalid", i)
+		}
+		samples = append(samples, routes.ElevationSample{
+			RouteDistanceMeters: *pair[0],
+			ElevationMeters:     *pair[1],
+		})
+	}
+
+	return samples, nil
 }
 
 func segmentsFromEdges(geometry []routes.Coordinate, edges []edgeAttribute) ([]routes.RouteSegmentResult, error) {

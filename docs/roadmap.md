@@ -162,6 +162,8 @@ A route can be represented as an ordered collection of meaningful RouteSegments.
 
 # M4 — Elevation and Hill Detection
 
+Status: Completed
+
 Goal:
 
 Detect elevation changes and hills.
@@ -177,6 +179,15 @@ Tasks:
 * detect downhill sections
 * create HILL event
 * create STEEP_HILL event
+
+Completed notes:
+
+* Local Valhalla is configured to build elevation data.
+* The Valhalla client enriches calculated routes with `/height` elevation samples when DEM data is available.
+* Route segments are enriched with elevation start/end, average incline and maximum incline.
+* `HILL` and `STEEP_HILL` events are detected deterministically from segment slope.
+* Segment slope metrics and route events are persisted in PostgreSQL/PostGIS.
+* `POST /api/v1/routes/analyze` and `GET /api/v1/routes/{id}` return persisted hill events.
 
 Definition of Done:
 
