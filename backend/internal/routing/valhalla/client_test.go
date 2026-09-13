@@ -66,6 +66,15 @@ func TestCalculateRoute(t *testing.T) {
 	if result.Segments[0].SpeedLimitKph != 40 {
 		t.Fatalf("expected speed limit 40, got %d", result.Segments[0].SpeedLimitKph)
 	}
+	if len(result.RoadEventHints) != 1 {
+		t.Fatalf("expected 1 road event hint, got %d", len(result.RoadEventHints))
+	}
+	if !result.RoadEventHints[0].Roundabout {
+		t.Fatal("expected roundabout road event hint")
+	}
+	if result.RoadEventHints[0].IntersectingEdges != 2 {
+		t.Fatalf("expected 2 intersecting edges, got %d", result.RoadEventHints[0].IntersectingEdges)
+	}
 	if len(result.ElevationProfile) != 2 {
 		t.Fatalf("expected 2 elevation samples, got %d", len(result.ElevationProfile))
 	}
@@ -177,7 +186,16 @@ func handleTraceAttributesTestRequest(t *testing.T, w http.ResponseWriter, r *ht
 				"use": "road",
 				"speed_limit": 40,
 				"begin_shape_index": 0,
-				"end_shape_index": 1
+				"end_shape_index": 1,
+				"roundabout": true,
+				"end_node": {
+					"type": "street_intersection",
+					"intersecting_edges": [
+						{"driveability": "forward"},
+						{"driveability": "both"},
+						{"driveability": "none"}
+					]
+				}
 			}
 		]
 	}`))

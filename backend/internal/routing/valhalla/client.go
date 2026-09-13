@@ -79,9 +79,10 @@ func (c *Client) CalculateRoute(ctx context.Context, origin routes.Coordinate, d
 		return routes.RouteResult{}, fmt.Errorf("decode valhalla route shape: %w", err)
 	}
 	segments := []routes.RouteSegmentResult{}
+	roadEventHints := []routes.RoadEventHint{}
 	edges, err := c.traceAttributes(ctx, leg.Shape)
 	if err == nil {
-		segments, err = segmentsFromEdges(geometry, edges)
+		segments, roadEventHints, err = segmentsFromEdges(geometry, edges)
 		if err != nil {
 			return routes.RouteResult{}, err
 		}
@@ -103,6 +104,7 @@ func (c *Client) CalculateRoute(ctx context.Context, origin routes.Coordinate, d
 		DurationSeconds:  int(math.Round(route.Trip.Summary.Time)),
 		Polyline:         leg.Shape,
 		Segments:         segments,
+		RoadEventHints:   roadEventHints,
 		ElevationProfile: elevationProfile,
 	}, nil
 }
@@ -183,14 +185,29 @@ type traceAttributesResponse struct {
 }
 
 type edgeAttribute struct {
-	Names           []string `json:"names"`
-	Length          float64  `json:"length"`
-	Speed           float64  `json:"speed"`
-	RoadClass       string   `json:"road_class"`
-	RoadUse         string   `json:"use"`
-	SpeedLimitKph   int      `json:"speed_limit"`
-	BeginShapeIndex int      `json:"begin_shape_index"`
-	EndShapeIndex   int      `json:"end_shape_index"`
+	Names                []string      `json:"names"`
+	Length               float64       `json:"length"`
+	Speed                float64       `json:"speed"`
+	RoadClass            string        `json:"road_class"`
+	RoadUse              string        `json:"use"`
+	SpeedLimitKph        int           `json:"speed_limit"`
+	BeginShapeIndex      int           `json:"begin_shape_index"`
+	EndShapeIndex        int           `json:"end_shape_index"`
+	Roundabout           bool          `json:"roundabout"`
+	InternalIntersection bool          `json:"internal_intersection"`
+	StopSign             bool          `json:"stop_sign"`
+	TrafficSignal        bool          `json:"traffic_signal"`
+	EndNode              nodeAttribute `json:"end_node"`
+}
+
+type nodeAttribute struct {
+	Type              string             `json:"type"`
+	Fork              bool               `json:"fork"`
+	IntersectingEdges []intersectingEdge `json:"intersecting_edges"`
+}
+
+type intersectingEdge struct {
+	Driveability string `json:"driveability"`
 }
 
 func (c *Client) traceAttributes(ctx context.Context, encodedPolyline string) ([]edgeAttribute, error) {
@@ -209,6 +226,11 @@ func (c *Client) traceAttributes(ctx context.Context, encodedPolyline string) ([
 				"edge.speed_limit",
 				"edge.begin_shape_index",
 				"edge.end_shape_index",
+				"edge.roundabout",
+				"edge.internal_intersection",
+				"node.type",
+				"node.fork",
+				"node.intersecting_edge.driveability",
 			},
 		},
 	})
@@ -295,23 +317,26 @@ func (c *Client) height(ctx context.Context, encodedPolyline string) ([]routes.E
 	return samples, nil
 }
 
-func segmentsFromEdges(geometry []routes.Coordinate, edges []edgeAttribute) ([]routes.RouteSegmentResult, error) {
+func segmentsFromEdges(geometry []routes.Coordinate, edges []edgeAttribute) ([]routes.RouteSegmentResult, []routes.RoadEventHint, error) {
 	if len(edges) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	groups := make([]edgeGroup, 0, len(edges))
+	hints := make([]routes.RoadEventHint, 0, len(edges))
+	routeDistanceStartMeters := 0
 	for i, edge := range edges {
 		if edge.BeginShapeIndex < 0 ||
 			edge.EndShapeIndex < edge.BeginShapeIndex ||
 			edge.EndShapeIndex >= len(geometry) {
-			return nil, fmt.Errorf("valhalla edge %d has invalid shape indexes", i)
+			return nil, nil, fmt.Errorf("valhalla edge %d has invalid shape indexes", i)
 		}
 		if edge.EndShapeIndex == edge.BeginShapeIndex {
 			continue
 		}
 
 		roadName := strings.Join(edge.Names, " / ")
+		edgeDistanceMeters := int(math.Round(edge.Length * 1000))
 		if len(groups) == 0 || !groups[len(groups)-1].matches(edge, roadName) {
 			groups = append(groups, edgeGroup{
 				beginShapeIndex: edge.BeginShapeIndex,
@@ -320,16 +345,26 @@ func segmentsFromEdges(geometry []routes.Coordinate, edges []edgeAttribute) ([]r
 				roadName:        roadName,
 				roadUse:         edge.RoadUse,
 				speedLimitKph:   edge.SpeedLimitKph,
-				distanceMeters:  int(math.Round(edge.Length * 1000)),
+				distanceMeters:  edgeDistanceMeters,
 				durationSeconds: speedDurationSeconds(edge.Length, edge.Speed),
 			})
-			continue
+		} else {
+			group := &groups[len(groups)-1]
+			group.endShapeIndex = edge.EndShapeIndex
+			group.distanceMeters += edgeDistanceMeters
+			group.durationSeconds += speedDurationSeconds(edge.Length, edge.Speed)
 		}
 
-		group := &groups[len(groups)-1]
-		group.endShapeIndex = edge.EndShapeIndex
-		group.distanceMeters += int(math.Round(edge.Length * 1000))
-		group.durationSeconds += speedDurationSeconds(edge.Length, edge.Speed)
+		hints = append(hints, roadEventHintFromEdge(
+			geometry,
+			edges,
+			edge,
+			i,
+			len(groups)-1,
+			routeDistanceStartMeters,
+			edgeDistanceMeters,
+		))
+		routeDistanceStartMeters += edgeDistanceMeters
 	}
 
 	segments := make([]routes.RouteSegmentResult, 0, len(groups))
@@ -350,7 +385,7 @@ func segmentsFromEdges(geometry []routes.Coordinate, edges []edgeAttribute) ([]r
 		})
 	}
 
-	return segments, nil
+	return segments, hints, nil
 }
 
 type edgeGroup struct {
@@ -377,6 +412,84 @@ func speedDurationSeconds(lengthKilometers float64, speedKPH float64) int {
 		return 0
 	}
 	return int(math.Round((lengthKilometers / speedKPH) * 3600))
+}
+
+func roadEventHintFromEdge(
+	geometry []routes.Coordinate,
+	edges []edgeAttribute,
+	edge edgeAttribute,
+	edgeIndex int,
+	segmentSequence int,
+	routeDistanceStartMeters int,
+	edgeDistanceMeters int,
+) routes.RoadEventHint {
+	segmentGeometry := geometry[edge.BeginShapeIndex : edge.EndShapeIndex+1]
+
+	return routes.RoadEventHint{
+		SegmentSequence:      segmentSequence,
+		Position:             midpointCoordinate(segmentGeometry),
+		RouteDistanceMeters:  routeDistanceStartMeters + edgeDistanceMeters/2,
+		RoadClass:            edge.RoadClass,
+		RoadUse:              edge.RoadUse,
+		NodeType:             edge.EndNode.Type,
+		IntersectingEdges:    drivableIntersectingEdges(edge.EndNode.IntersectingEdges),
+		Roundabout:           edge.Roundabout,
+		InternalIntersection: edge.InternalIntersection,
+		Fork:                 edge.EndNode.Fork,
+		StopSign:             edge.StopSign,
+		TrafficSignal:        edge.TrafficSignal,
+		EnteringHighway:      enteringHighway(edges, edgeIndex),
+		ExitingHighway:       exitingHighway(edges, edgeIndex),
+	}
+}
+
+func midpointCoordinate(coordinates []routes.Coordinate) routes.Coordinate {
+	if len(coordinates) == 0 {
+		return routes.Coordinate{}
+	}
+	return coordinates[len(coordinates)/2]
+}
+
+func drivableIntersectingEdges(intersectingEdges []intersectingEdge) int {
+	count := 0
+	for _, edge := range intersectingEdges {
+		if edge.Driveability == "forward" ||
+			edge.Driveability == "backward" ||
+			edge.Driveability == "both" {
+			count++
+		}
+	}
+	return count
+}
+
+func enteringHighway(edges []edgeAttribute, edgeIndex int) bool {
+	if edgeIndex == 0 {
+		return false
+	}
+
+	edge := edges[edgeIndex]
+	previous := edges[edgeIndex-1]
+	if isHighwayEdge(previous) {
+		return false
+	}
+	if isHighwayEdge(edge) {
+		return true
+	}
+	return edge.RoadUse == "ramp" && edgeIndex+1 < len(edges) && isHighwayEdge(edges[edgeIndex+1])
+}
+
+func exitingHighway(edges []edgeAttribute, edgeIndex int) bool {
+	if edgeIndex == 0 {
+		return false
+	}
+
+	edge := edges[edgeIndex]
+	previous := edges[edgeIndex-1]
+	return isHighwayEdge(previous) && (!isHighwayEdge(edge) || edge.RoadUse == "ramp")
+}
+
+func isHighwayEdge(edge edgeAttribute) bool {
+	return edge.RoadClass == "motorway" || edge.RoadClass == "trunk"
 }
 
 func segmentsFromManeuvers(geometry []routes.Coordinate, maneuvers []maneuver) ([]routes.RouteSegmentResult, error) {

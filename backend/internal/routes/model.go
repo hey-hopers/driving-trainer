@@ -71,6 +71,23 @@ type RouteSegmentResult struct {
 	InclineMaxPct   *float64
 }
 
+type RoadEventHint struct {
+	SegmentSequence      int
+	Position             Coordinate
+	RouteDistanceMeters  int
+	RoadClass            string
+	RoadUse              string
+	NodeType             string
+	IntersectingEdges    int
+	Roundabout           bool
+	InternalIntersection bool
+	Fork                 bool
+	StopSign             bool
+	TrafficSignal        bool
+	EnteringHighway      bool
+	ExitingHighway       bool
+}
+
 type ElevationSample struct {
 	RouteDistanceMeters float64
 	ElevationMeters     float64

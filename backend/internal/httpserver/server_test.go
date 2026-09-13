@@ -24,6 +24,15 @@ func (fakeRouter) CalculateRoute(ctx context.Context, origin routes.Coordinate, 
 		DistanceMeters:  2476,
 		DurationSeconds: 376,
 		Polyline:        "??AA",
+		RoadEventHints: []routes.RoadEventHint{
+			{
+				SegmentSequence:     0,
+				Position:            routes.Coordinate{Latitude: 0, Longitude: 0},
+				RouteDistanceMeters: 120,
+				NodeType:            "street_intersection",
+				IntersectingEdges:   2,
+			},
+		},
 	}, nil
 }
 
@@ -31,8 +40,9 @@ type fakeStore struct{}
 
 func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes.Route, error) {
 	segments := make([]routes.RouteSegment, 0, len(route.Segments))
+	segmentIDsBySequence := map[int]string{}
 	for _, segment := range route.Segments {
-		segments = append(segments, routes.RouteSegment{
+		createdSegment := routes.RouteSegment{
 			ID:              "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 			RouteID:         "11111111-1111-1111-1111-111111111111",
 			Sequence:        segment.Sequence,
@@ -43,6 +53,23 @@ func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes
 			RoadUse:         segment.RoadUse,
 			SpeedLimitKph:   segment.SpeedLimitKph,
 			CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
+		}
+		segments = append(segments, createdSegment)
+		segmentIDsBySequence[createdSegment.Sequence] = createdSegment.ID
+	}
+
+	events := make([]routes.RouteEvent, 0, len(route.Events))
+	for _, event := range route.Events {
+		events = append(events, routes.RouteEvent{
+			ID:                  "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+			RouteID:             "11111111-1111-1111-1111-111111111111",
+			SegmentID:           segmentIDsBySequence[event.SegmentSequence],
+			Type:                event.Type,
+			Position:            event.Position,
+			RouteDistanceMeters: event.RouteDistanceMeters,
+			DifficultyScore:     event.DifficultyScore,
+			Metadata:            event.Metadata,
+			CreatedAt:           time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
 		})
 	}
 
@@ -54,6 +81,7 @@ func (fakeStore) CreateRoute(ctx context.Context, route routes.NewRoute) (routes
 		DurationSeconds: route.DurationSeconds,
 		Polyline:        route.Polyline,
 		Segments:        segments,
+		Events:          events,
 		CreatedAt:       time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC),
 	}, nil
 }
@@ -126,6 +154,12 @@ func TestAnalyzeRouteValidRequest(t *testing.T) {
 	}
 	if response.Route.Segments[0].RoadUse != "" {
 		t.Fatalf("expected empty fallback road use, got %q", response.Route.Segments[0].RoadUse)
+	}
+	if len(response.Events) != 1 {
+		t.Fatalf("expected 1 route event, got %d", len(response.Events))
+	}
+	if response.Events[0].Type != "INTERSECTION" {
+		t.Fatalf("expected INTERSECTION event, got %q", response.Events[0].Type)
 	}
 }
 

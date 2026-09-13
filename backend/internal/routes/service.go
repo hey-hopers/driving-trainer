@@ -20,6 +20,7 @@ type RouteResult struct {
 	DurationSeconds  int
 	Polyline         string
 	Segments         []RouteSegmentResult
+	RoadEventHints   []RoadEventHint
 	ElevationProfile []ElevationSample
 }
 
@@ -68,6 +69,8 @@ func (s *Service) Analyze(ctx context.Context, req AnalyzeRouteRequest) (Analyze
 
 	segments, elevationEvents := AnalyzeElevation(segmentsOrWholeRoute(route, coordinates), route.ElevationProfile)
 	events := append(elevationEvents, AnalyzeCurves(segments)...)
+	roadEvents := append(AnalyzeRoadEvents(route.RoadEventHints), AnalyzeSegmentRoadEvents(segments)...)
+	events = append(events, dedupeRoadEvents(roadEvents)...)
 
 	persistedRoute, err := s.store.CreateRoute(ctx, NewRoute{
 		Source:          "valhalla",

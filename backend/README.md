@@ -86,6 +86,9 @@ O endpoint chama o Valhalla e retorna distancia, duracao e polyline real da rota
 Observacao: `route.polyline` contem uma polyline6 retornada pelo Valhalla.
 Quando o Valhalla local tiver DEM de elevacao disponivel, a resposta tambem inclui metricas de inclinacao nos segmentos e eventos `HILL` / `STEEP_HILL`.
 A resposta tambem pode incluir eventos de curva detectados pela geometria da rota: `CURVE`, `SHARP_CURVE` e `CURVE_SEQUENCE`.
+A resposta tambem pode incluir eventos viarios detectados por atributos do Valhalla e por transicoes entre segmentos: `INTERSECTION`, `COMPLEX_INTERSECTION`, `ROUNDABOUT`, `HIGHWAY_ENTRY` e `HIGHWAY_EXIT`.
+
+Observacao: `STOP` e `TRAFFIC_LIGHT` existem como tipos de evento no dominio, mas dependem de dados que nao foram expostos pela integracao atual com `trace_attributes` durante a validacao local. Para esses eventos, pode ser necessario enriquecer a rota futuramente com Valhalla tiles, `/locate`, atributos customizados do Valhalla ou dados OSM/PostGIS.
 
 ### PowerShell
 
@@ -129,17 +132,16 @@ Resposta esperada:
   },
   "events": [
     {
-      "type": "CURVE",
+      "type": "INTERSECTION",
       "position": {
         "latitude": -26.91,
         "longitude": -49.07
       },
       "routeDistanceMeters": 850,
-      "difficultyScore": 4.8,
+      "difficultyScore": 3,
       "metadata": {
-        "direction": "right",
-        "totalTurnDegrees": 42.5,
-        "lengthMeters": 80
+        "nodeType": "street_intersection",
+        "intersectingEdges": 3
       }
     }
   ]

@@ -230,6 +230,8 @@ The system identifies and classifies meaningful curves along a route.
 
 # M6 — Intersection and Road Events
 
+Status: Completed
+
 Goal:
 
 Identify important driving situations from road/intersection data.
@@ -243,6 +245,21 @@ Initial events:
 * COMPLEX_INTERSECTION
 * HIGHWAY_ENTRY
 * HIGHWAY_EXIT
+
+Completed notes:
+
+* Added a deterministic road event analyzer for `INTERSECTION`, `COMPLEX_INTERSECTION`, `ROUNDABOUT`, `HIGHWAY_ENTRY` and `HIGHWAY_EXIT`.
+* Valhalla `trace_attributes` requests documented road/intersection attributes and maps them into domain-level road event hints.
+* Segment transitions are used as a conservative fallback for relevant intersections and highway entry/exit events when detailed node hints are incomplete.
+* Nearby roundabout and highway transition events are deduplicated to avoid one real-world situation appearing once per Valhalla edge.
+* `POST /api/v1/routes/analyze` persists and returns road events alongside existing hill and curve events.
+* `GET /api/v1/routes/{id}` returns persisted road events.
+* Validated with local Valhalla routes for `INTERSECTION`, `COMPLEX_INTERSECTION`, `ROUNDABOUT`, `HIGHWAY_ENTRY` and `HIGHWAY_EXIT`.
+
+Known limitation:
+
+* `STOP` and `TRAFFIC_LIGHT` are supported by the domain analyzer when source data is present, but the current Valhalla `trace_attributes` integration did not expose those attributes in local validation.
+* Future support for reliable `STOP` and `TRAFFIC_LIGHT` detection may require Valhalla tiles, `/locate`, custom Valhalla attributes, or direct OSM/PostGIS enrichment.
 
 Definition of Done:
 
